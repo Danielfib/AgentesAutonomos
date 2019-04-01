@@ -108,6 +108,7 @@ class QLearningAgent(ReinforcementAgent):
         # Pick Action
         legalActions = self.getLegalActions(state)
         action = None
+        
         "*** YOUR CODE HERE ***"
         if len(legalActions) == 0:
           action = None
