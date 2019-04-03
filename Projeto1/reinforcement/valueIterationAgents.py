@@ -46,7 +46,9 @@ class ValueIterationAgent(ValueEstimationAgent):
         # Write value iteration code here
         "*** YOUR CODE HERE ***"
         for it in range(iterations):
+            # copy old values
             newValues = self.values.copy()
+            # update values
             for state in mdp.getStates():
                 newValues[state] = self.getQValue(state, self.computeActionFromValues(state))
             self.values = newValues
@@ -65,13 +67,18 @@ class ValueIterationAgent(ValueEstimationAgent):
           value function stored in self.values.
         """
         "*** YOUR CODE HERE ***"
-        "One of the N values in the state"
+        
+        # if state is terminal, return it's reward
         if self.mdp.isTerminal(state):
             return self.mdp.getReward(state, None, None)
 
         qValue = 0
+        # for each possible s'
         for (nextState, prob) in self.mdp.getTransitionStatesAndProbs(state, action):
+            #compute T(s, a, s') * [R(s, a, s') + gama * Vk(s')]
             qValue += prob * (self.mdp.getReward(state, action, nextState) + (self.discount * self.values[nextState]))
+        
+        #return sum
         return qValue
 
     def computeActionFromValues(self, state):
@@ -85,9 +92,12 @@ class ValueIterationAgent(ValueEstimationAgent):
         """
         "*** YOUR CODE HERE ***"
         possibleActions = self.mdp.getPossibleActions(state)
+
+        # when there are no possible actions, return None
         if (self.mdp.isTerminal(state) or len(possibleActions) == 0):
             return None
         
+        # choose the best action based on the max Q-value
         actionValue = (possibleActions[0], self.computeQValueFromValues(state, possibleActions[0]))
         for action in possibleActions:
             qValue = self.computeQValueFromValues(state, action)
