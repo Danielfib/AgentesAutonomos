@@ -21,7 +21,59 @@ class SIMPLES(sc2.BotAI):
         if self.can_afford(SCV) and self.workers.amount < 16 and cc.is_idle:
             await self.do(cc.train(SCV))
 
-        await self.RampBlocker()        
+        await self.Resources_Management()  
+        await self.Military_Management()
+        await self.Scout_Management()
+
+    async def Scout_Management(self):
+        await self.WalkingScout()
+        await self.BuilderScout()
+    async def WalkingScout(self):
+        print("TODO Walking Scout")
+    async def BuilderScout(self):
+        print("TODO Builder Scout")
+    async def Military_Management(self):
+        if self.can_afford(MARINE):
+            for barrack in self.units(BARRACKS):
+                if(barrack.is_idle):
+                    await self.do(barrack(BARRACKSTRAIN_MARINE))
+                    if(barrack.add_on_tag != 0):
+                        await self.do(barrack(BARRACKSTRAIN_MARINE))
+
+        await self.Research()
+        await self.Armies()
+    async def Research(self):
+        print("TODO Research")
+    async def Armies(self):
+        await self.ArmiesMacro()
+        await self.ArmiesMicro()
+    async def ArmiesMacro(self):
+        print("TODO Armies Macro")
+    async def ArmiesMicro(self):
+        print("TODO Armies Micro")
+    async def Resources_Management(self):
+        await self.Collector()
+        await self.Constructor()
+    async def Collector(self):
+        print("TODO Collector")
+        self.distribute_workers()
+        # build refineries (on nearby vespene) when at least one SUPPLYDEPOT is in construction
+        if self.units(SUPPLYDEPOT).amount > 0 and self.already_pending(REFINERY) < 1:
+            for th in self.townhalls:
+                vgs = self.state.vespene_geyser.closer_than(10, th)
+                for vg in vgs:
+                    if await self.can_place(REFINERY, vg.position) and self.can_afford(REFINERY):
+                        # caution: the target for the refinery has to be the vespene geyser, not its position!
+                        await self.do(self.getWorker().build(REFINERY, vg))
+
+    async def Constructor(self):
+        await self.RampBlocker()
+        
+        if self.supply_left < 4 and self.supply_used >= 14 and self.can_afford(SUPPLYDEPOT) and self.units(SUPPLYDEPOT).not_ready.amount + self.already_pending(SUPPLYDEPOT) < 1:
+            worker = self.getWorker()
+            loc = await self.find_placement(SUPPLYDEPOT, worker.position, placement_step=3)
+            await self.do(worker.build(SUPPLYDEPOT, loc))
+
 
     async def RampBlocker(self):
         # Raise depos when enemies are nearby
@@ -60,24 +112,21 @@ class SIMPLES(sc2.BotAI):
             if len(depot_placement_positions) == 0:
                 return
             # Choose any depot location
-            target_depot_location = depot_placement_positions.pop()
-                            
+            target_depot_location = depot_placement_positions.pop()                            
             await self.do(self.getWorker().build(SUPPLYDEPOT, target_depot_location))
 
         # Build barracks
         if depots.ready and self.can_afford(BARRACKS) and not self.already_pending(BARRACKS):
             if self.units(BARRACKS).amount + self.already_pending(BARRACKS) > 0:
-                return
-            
+                return            
             if barracks_placement_position:  # if workers were found              
                 await self.do(self.getWorker().build(BARRACKS, barracks_placement_position))
-
-
 
 
         if self.workers.amount > 30:
             for worker in self.workers:
                 await self.do(worker.attack(self.enemy_start_locations[0]))
+
 
     def getWorker(self):
         if self.workers.idle:
@@ -106,12 +155,12 @@ def main():
             # #"HonorgroundsLE",  # Has 4 or 9 upper points at the large main base ramp
         ]
     )
-    sc2.run_game(
-        sc2.maps.get(map), [Bot(Race.Terran, SIMPLES()), Computer(Race.Terran, Difficulty.Medium)], realtime=False
+    sc2.run_game(sc2.maps.get(map), [
+            Bot(Race.Terran, SIMPLES()), 
+            Computer(Race.Terran, Difficulty.Medium)
+        ], realtime=False
     )
-    # sc2.run_game(
-    #     sc2.maps.get(map), [Human(Race.Terran), Computer(Race.Zerg, Difficulty.VeryEasy)], realtime=True
-    # )
+    
 
 if __name__ == "__main__":
     main()
