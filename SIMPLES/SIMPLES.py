@@ -18,20 +18,28 @@ class SIMPLES(sc2.BotAI):
         else:
             cc = cc.first
 
-        if self.can_afford(SCV) and self.workers.amount < 16 and cc.is_idle:
+        if self.can_afford(SCV) and self.workers.amount < 20 and cc.is_idle:
             await self.do(cc.train(SCV))
 
         await self.Resources_Management()  
         await self.Military_Management()
         await self.Scout_Management()
 
+        if self.units(MARINE).amount > 20:
+            for marine in self.units(MARINE):
+                await self.do(marine.attack(self.enemy_start_locations[0]))
+            
+
     async def Scout_Management(self):
         await self.WalkingScout()
         await self.BuilderScout()
+    
     async def WalkingScout(self):
         print("TODO Walking Scout")
+    
     async def BuilderScout(self):
         print("TODO Builder Scout")
+    
     async def Military_Management(self):
         if self.can_afford(MARINE):
             for barrack in self.units(BARRACKS):
@@ -43,7 +51,31 @@ class SIMPLES(sc2.BotAI):
         await self.Research()
         await self.Armies()
     async def Research(self):
-        print("TODO Research")
+        if self.units(BARRACKSREACTOR).amount > 0 and self.units(ENGINEERINGBAY).amount < 2 and self.can_afford(ENGINEERINGBAY):
+            worker = self.getWorker()
+            loc = await self.find_placement(ENGINEERINGBAY, worker.position, placement_step=3)
+            await self.do(worker.build(ENGINEERINGBAY, loc))
+
+        for idleBay in self.units(ENGINEERINGBAY).idle:
+            if not(UpgradeId.TERRANINFANTRYWEAPONSLEVEL1 in self.state.upgrades) and self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL1):
+                await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL1))
+            if not(UpgradeId.TERRANINFANTRYARMORSLEVEL1 in self.state.upgrades) and self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL1):
+                await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL1))
+            if self.units(ARMORY).amount > 0:
+                if self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL2):
+                    await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL2))
+                if self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL2):
+                    await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL2))
+                if self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL3):
+                    await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL3))
+                if self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL3):
+                    await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL3))
+            # elif self.can_afford(ARMORY):
+            #     # Not working, cant manage to build armory
+            #     worker = self.getWorker()
+            #     loc = await self.find_placement(ARMORY, worker.position)
+            #     await self.do(worker.build(ARMORY, loc))
+
     async def Armies(self):
         await self.ArmiesMacro()
         await self.ArmiesMicro()
@@ -116,16 +148,12 @@ class SIMPLES(sc2.BotAI):
             await self.do(self.getWorker().build(SUPPLYDEPOT, target_depot_location))
 
         # Build barracks
-        if depots.ready and self.can_afford(BARRACKS) and not self.already_pending(BARRACKS):
+        if self.can_afford(BARRACKS) and not self.already_pending(BARRACKS):
             if self.units(BARRACKS).amount + self.already_pending(BARRACKS) > 0:
+                print("---------------------------------------------------------------------")
                 return            
             if barracks_placement_position:  # if workers were found              
                 await self.do(self.getWorker().build(BARRACKS, barracks_placement_position))
-
-
-        if self.workers.amount > 30:
-            for worker in self.workers:
-                await self.do(worker.attack(self.enemy_start_locations[0]))
 
 
     def getWorker(self):
