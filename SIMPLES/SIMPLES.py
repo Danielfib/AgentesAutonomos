@@ -28,7 +28,7 @@ class SIMPLES(sc2.BotAI):
         if self.units(MARINE).amount > 20:
             for marine in self.units(MARINE):
                 await self.do(marine.attack(self.enemy_start_locations[0]))
-            
+
 
     async def Scout_Management(self):
         await self.WalkingScout()
@@ -70,11 +70,11 @@ class SIMPLES(sc2.BotAI):
                     await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL3))
                 if self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL3):
                     await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL3))
-            # elif self.can_afford(ARMORY):
-            #     # Not working, cant manage to build armory
-            #     worker = self.getWorker()
-            #     loc = await self.find_placement(ARMORY, worker.position)
-            #     await self.do(worker.build(ARMORY, loc))
+            elif self.can_afford(ARMORY):
+                # Not working, cant manage to build armory
+                worker = self.getWorker()
+                loc = await self.find_placement(ARMORY, worker.position)
+                await self.do(worker.build(ARMORY, loc))
 
     async def Armies(self):
         await self.ArmiesMacro()
@@ -90,13 +90,23 @@ class SIMPLES(sc2.BotAI):
         print("TODO Collector")
         self.distribute_workers()
         # build refineries (on nearby vespene) when at least one SUPPLYDEPOT is in construction
-        if self.units(SUPPLYDEPOT).amount > 0 and self.already_pending(REFINERY) < 1:
+        if self.units(SUPPLYDEPOT).amount > 0 and self.units(REFINERY).amount < 1:
             for th in self.townhalls:
                 vgs = self.state.vespene_geyser.closer_than(10, th)
                 for vg in vgs:
                     if await self.can_place(REFINERY, vg.position) and self.can_afford(REFINERY):
                         # caution: the target for the refinery has to be the vespene geyser, not its position!
                         await self.do(self.getWorker().build(REFINERY, vg))
+
+        for a in self.units(REFINERY):
+            if a.assigned_harvesters < a.ideal_harvesters:
+                w = self.workers.closer_than(20, a)
+                if w.exists:
+                    await self.do(w.random.gather(a))
+
+        # do something with idle SCVs
+        # for scv in self.units(SCV).idle:
+        #     await self.do(scv.gather(self.state.mineral_field.closest_to(cc)))
 
     async def Constructor(self):
         await self.RampBlocker()
@@ -105,6 +115,26 @@ class SIMPLES(sc2.BotAI):
             worker = self.getWorker()
             loc = await self.find_placement(SUPPLYDEPOT, worker.position, placement_step=3)
             await self.do(worker.build(SUPPLYDEPOT, loc))
+
+        #building research buildings
+        if self.units(FACTORY).amount == 0 and self.can_afford(FACTORY):
+            worker = self.getWorker()
+            loc = await self.find_placement(FACTORY, worker.position)
+            await self.do(worker.build(FACTORY, loc))
+        elif self.units(ARMORY).amount == 0 and self.can_afford(ARMORY):
+            worker = self.getWorker()
+            loc = await self.find_placement(ARMORY, worker.position)
+            await self.do(worker.build(ARMORY, loc))
+
+        
+        if self.units(BARRACKSTECHLAB).amount == 0 and self.can_afford(BARRACKSTECHLAB):
+            worker = self.getWorker()
+            loc = await self.find_placement(BARRACKS, worker.position)
+            await self.do(worker.build(BARRACKS, loc))
+            for rax in self.units(BARRACKS):
+                if rax.add_on_tag == 0:
+                    await self.do(rax(BUILD_TECHLAB_BARRACKS))
+
 
 
     async def RampBlocker(self):
