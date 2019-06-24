@@ -138,8 +138,16 @@ class SIMPLES(sc2.BotAI):
         await self.RampBlocker()
         
         cc = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND)).first
+        
+        # manage orbital energy and drop mules
+        for oc in self.units(UnitTypeId.ORBITALCOMMAND).filter(lambda x: x.energy >= 50):
+            mfs = self.state.mineral_field.closer_than(10, oc)
+            if mfs:
+                mf = max(mfs, key=lambda x:x.mineral_contents)
+                await self.do(oc(CALLDOWNMULE_CALLDOWNMULE, mf))
 
-        if self.supply_left < 4 and self.supply_used >= 14 and self.can_afford(SUPPLYDEPOT) and self.units(SUPPLYDEPOT).not_ready.amount + self.already_pending(SUPPLYDEPOT) < 1:
+        # manage supplies
+        if self.supply_left < 6 and self.supply_used >= 14 and self.can_afford(SUPPLYDEPOT) and self.units(SUPPLYDEPOT).not_ready.amount + self.already_pending(SUPPLYDEPOT) < 1:
             worker = self.getWorker()
             loc = await self.find_placement(SUPPLYDEPOT, worker.position, placement_step=3)
             await self.do(worker.build(SUPPLYDEPOT, loc))
@@ -162,7 +170,7 @@ class SIMPLES(sc2.BotAI):
 
         #every other barrack than the lab barrack should have reactor
         for rax in self.units(BARRACKS).ready:
-            print(rax.add_on_tag)
+            #print(rax.add_on_tag)
             if self.units(BARRACKSTECHLAB).amount == 0 and rax.add_on_tag == 0:
                 if self.can_afford(BARRACKSTECHLAB):
                     await self.do(rax(BUILD_TECHLAB_BARRACKS))
