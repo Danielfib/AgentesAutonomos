@@ -38,6 +38,7 @@ class SIMPLES(sc2.BotAI):
         return
     
     async def Military_Management(self):
+        #TODO rally troops in front of base
         if self.can_afford(MARINE):
             for barrack in self.units(BARRACKS).ready:
                 if(barrack.is_idle) and self.supply_left > 1:
@@ -47,6 +48,13 @@ class SIMPLES(sc2.BotAI):
                         #TODO discover what is the add_on_tag for reactor, to build 2 at a time on reactors
                         await self.do(barrack(BARRACKSTRAIN_MARINE))
                         #print("")
+
+        if self.can_afford(MEDIVAC) and self.units(STARPORT).amount > 0:
+            if self.units(MEDIVAC).amount < self.units(MARINE).amount/8:
+                sp = self.units(STARPORT).first
+                if sp.is_idle:
+                    await self.do(sp(STARPORTTRAIN_MEDIVAC))
+                
 
         await self.Research()
         await self.Armies()
@@ -72,7 +80,7 @@ class SIMPLES(sc2.BotAI):
                 if not(UpgradeId.TERRANINFANTRYARMORSLEVEL3 in self.state.upgrades) and self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL3) and not self.already_pending(UpgradeId.TERRANINFANTRYARMORSLEVEL3):
                     await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL3))
 
-
+        #TODO flags should only be set to true when research is finished
         if self.units(BARRACKSTECHLAB).idle and self.units(BARRACKSTECHLAB).ready:
             if not(self.hasCombatShield) and self.can_afford(RESEARCH_COMBATSHIELD):
                 await self.do(self.units(BARRACKSTECHLAB).first(RESEARCH_COMBATSHIELD))
@@ -87,20 +95,29 @@ class SIMPLES(sc2.BotAI):
     async def ArmiesMacro(self):
         #print("TODO Armies Macro")
         #basic strategy: swarm enemy with all armies
-        if self.units(MARINE).amount > 60:
+        if self.units(MARINE).amount > 70:
             for marine in self.units(MARINE):
-                await self.do(marine.attack(self.enemy_start_locations[0]))
+                if not marine.is_attacking:
+                    await self.do(marine.attack(self.enemy_start_locations[0]))
+
+        #make medivac follow marines
+        for medivac in self.units(MEDIVAC):
+            if medivac.is_idle:
+                soldierToFollow = self.units(MARINE).first
+                await self.do(medivac.move(soldierToFollow.position))
 
     async def ArmiesMicro(self):
-        #TODO make it so that marines dont block each other on 
+        #TODO make it so that marines dont block each other 
         
         #use stimpack when attacking, if not already under effect
         if self.hasStimPack:
-            for marine in self.units(MARINE):
-                if not marine.has_buff(BuffId.STIMPACK) and marine.is_attacking and marine.health > 20:
-                    await self.do(marine(EFFECT_STIM_MARINE))
+            #TODO maybe refactor to improve peformance? 
+            # we could search for a particular enemy unit, instead of iterating all of them
+            for unit in self.known_enemy_units.not_structure:
+                for marine in self.units(MARINE):
+                    if not marine.has_buff(BuffId.STIMPACK) and marine.health > 20 and marine.target_in_range(unit):
+                        await self.do(marine(EFFECT_STIM_MARINE))
 
-        return
     async def Resources_Management(self):
         await self.Collector()
         await self.Constructor()
@@ -138,10 +155,6 @@ class SIMPLES(sc2.BotAI):
                 w = self.workers.closer_than(20, a)
                 if w.exists:
                     await self.do(w.random.gather(a))
-
-        # do something with idle SCVs
-        # for scv in self.units(SCV).idle:
-        #     await self.do(scv.gather(self.state.mineral_field.closest_to(cc)))
 
     async def Constructor(self):
         await self.RampBlocker()
@@ -183,7 +196,9 @@ class SIMPLES(sc2.BotAI):
         #build 2 barracks, excluding the one from the ramp
         if self.units(BARRACKS).amount < 3 and self.can_afford(BARRACKS):
             worker = self.getWorker()
-            await self.build(BARRACKS, near=cc.position.towards(self.game_info.map_center, 10).random_on_distance(6), unit=worker)
+            next_expo = await self.get_next_expansion()
+            location = await self.find_placement(UnitTypeId.BARRACKS, next_expo, placement_step=1)
+            await self.build(BARRACKS, near=cc.position.towards(location, 20).random_on_distance(4), unit=worker)
 
         #every other barrack than the lab barrack should have reactor
         for rax in self.units(BARRACKS).ready:
@@ -194,7 +209,9 @@ class SIMPLES(sc2.BotAI):
             elif rax.add_on_tag == 0 and self.can_afford(BARRACKSREACTOR):            
                 await self.do(rax(BUILD_REACTOR_BARRACKS))            
 
-
+        if self.units(STARPORT).amount == 0 and self.can_afford(STARPORT):
+            worker = self.getWorker()
+            await self.build(STARPORT, near=cc.position.towards(self.game_info.map_center, 10).random_on_distance(4), unit=worker)
 
 
     async def RampBlocker(self):
