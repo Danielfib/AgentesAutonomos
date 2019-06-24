@@ -21,17 +21,9 @@ class SIMPLES(sc2.BotAI):
         else:
             cc = cc.first
 
-        if self.can_afford(SCV) and self.workers.amount < 22 and cc.is_idle:
-            await self.do(cc.train(SCV))
-
         await self.Resources_Management()  
         await self.Military_Management()
         await self.Scout_Management()
-
-        if self.units(MARINE).amount > 40:
-            for marine in self.units(MARINE):
-                await self.do(marine.attack(self.enemy_start_locations[0]))
-
 
     async def Scout_Management(self):
         await self.WalkingScout()
@@ -54,6 +46,7 @@ class SIMPLES(sc2.BotAI):
                     if(barrack.add_on_tag != 0) and self.can_afford(MARINE):
                         #TODO discover what is the add_on_tag for reactor, to build 2 at a time on reactors
                         await self.do(barrack(BARRACKSTRAIN_MARINE))
+                        #print("")
 
         await self.Research()
         await self.Armies()
@@ -93,26 +86,42 @@ class SIMPLES(sc2.BotAI):
         await self.ArmiesMicro()
     async def ArmiesMacro(self):
         #print("TODO Armies Macro")
-        return
+        #basic strategy: swarm enemy with all armies
+        if self.units(MARINE).amount > 60:
+            for marine in self.units(MARINE):
+                await self.do(marine.attack(self.enemy_start_locations[0]))
+
     async def ArmiesMicro(self):
-        #print("TODO Armies Micro")
+        #TODO make it so that marines dont block each other on 
+        
+        #use stimpack when attacking, if not already under effect
+        if self.hasStimPack:
+            for marine in self.units(MARINE):
+                if not marine.has_buff(BuffId.STIMPACK) and marine.is_attacking and marine.health > 20:
+                    await self.do(marine(EFFECT_STIM_MARINE))
+
         return
     async def Resources_Management(self):
         await self.Collector()
         await self.Constructor()
     async def Collector(self):
-        cc = self.units(COMMANDCENTER)
         #print("TODO Collector")
-        #TODO retask idle workers
-        #TODO make MULE
-        if self.units(ORBITALCOMMAND).amount == 0 and self.can_afford(ORBITALCOMMAND) and cc.idle:
-            await self.do(cc.first(UPGRADETOORBITAL_ORBITALCOMMAND))
+        # manage collectors
+        for center in self.townhalls:
+            if center.ideal_harvesters > center.assigned_harvesters and self.can_afford(SCV) and center.is_idle:
+                await self.do(center.train(SCV))
 
-        if self.units(ORBITALCOMMAND).amount > 0:
-            oc = self.units(ORBITALCOMMAND).first
-            #if oc.energy > 50:
-                #how to verify energy?
-                #await self.do(oc(CALLDOWNMULE_CALLDOWNMULE))
+        # manage orbital energy and drop mules
+        for oc in self.units(UnitTypeId.ORBITALCOMMAND).filter(lambda x: x.energy >= 50):
+            mfs = self.state.mineral_field.closer_than(10, oc)
+            if mfs:
+                mf = max(mfs, key=lambda x:x.mineral_contents)
+                await self.do(oc(CALLDOWNMULE_CALLDOWNMULE, mf))
+
+        #upgrade command centers to orbital command
+        for cc in self.units(COMMANDCENTER):
+            if self.can_afford(ORBITALCOMMAND) and cc.is_idle:
+                await self.do(cc(UPGRADETOORBITAL_ORBITALCOMMAND))
 
         await self.distribute_workers()
         # build refineries (on nearby vespene) when at least one SUPPLYDEPOT is in construction
@@ -139,12 +148,20 @@ class SIMPLES(sc2.BotAI):
         
         cc = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND)).first
         
-        # manage orbital energy and drop mules
-        for oc in self.units(UnitTypeId.ORBITALCOMMAND).filter(lambda x: x.energy >= 50):
-            mfs = self.state.mineral_field.closer_than(10, oc)
-            if mfs:
-                mf = max(mfs, key=lambda x:x.mineral_contents)
-                await self.do(oc(CALLDOWNMULE_CALLDOWNMULE, mf))
+        # expand if we can afford and have less than 2 bases
+        if 1 <= self.townhalls.amount < 2 and self.already_pending(UnitTypeId.COMMANDCENTER) == 0 and self.can_afford(UnitTypeId.COMMANDCENTER):
+            # get_next_expansion returns the center of the mineral fields of the next nearby expansion
+            next_expo = await self.get_next_expansion()
+            # from the center of mineral fields, we need to find a valid place to place the command center
+            location = await self.find_placement(UnitTypeId.COMMANDCENTER, next_expo, placement_step=1)
+            if location:
+                # now we "select" (or choose) the nearest worker to that found location
+                w = self.select_build_worker(location)
+                if w and self.can_afford(UnitTypeId.COMMANDCENTER):
+                    # the worker will be commanded to build the command center
+                    error = await self.do(w.build(UnitTypeId.COMMANDCENTER, location))
+                    if error:
+                        print(error)
 
         # manage supplies
         if self.supply_left < 6 and self.supply_used >= 14 and self.can_afford(SUPPLYDEPOT) and self.units(SUPPLYDEPOT).not_ready.amount + self.already_pending(SUPPLYDEPOT) < 1:
