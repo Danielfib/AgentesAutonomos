@@ -136,8 +136,13 @@ class SIMPLES(sc2.BotAI):
         #make medivac follow marines
         for medivac in self.units(MEDIVAC):
             if medivac.is_idle:
-                soldierToFollow = self.units(MARINE).first
-                await self.do(medivac.move(soldierToFollow.position))
+                marines = self.units(MARINE)
+                if marines.amount == 0:
+                    await self.do(medivac.move(self.start_location))
+                    continue
+                
+                marines = marines.sorted(lambda unit: unit.health + medivac.position.distance_to(unit.position))
+                await self.do(medivac.move(marines.first.position))
 
     async def ArmiesMicro(self):
         #TODO make it so that marines dont block each other 
