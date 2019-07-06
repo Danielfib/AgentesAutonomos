@@ -9,6 +9,7 @@ from sc2 import Race, Difficulty
 from sc2.constants import *
 from sc2.player import Bot, Computer, Human
 from sc2.position import Point2, Point3
+from sc2.data import Race
 
 class SIMPLES(sc2.BotAI):
     #TODO build method is fine but it generates lots of log, on every try and fail. Maybe go back to previous way of building?
@@ -36,6 +37,21 @@ class SIMPLES(sc2.BotAI):
         if scouter is None:
             return
 
+        # If enemies found, run or fight
+        close_enemies = self.state.units.closer_than(15, scouter.position).filter(lambda unit: unit.is_enemy)
+        if close_enemies.amount > 1:
+            self.scouterGoingEnemy = False
+            await self.do(scouter.move(self.start_location))
+            return
+        elif close_enemies.amount == 1:
+            enemy = close_enemies[0]
+            if enemy.race == Race.Zerg:
+                self.scouterGoingEnemy = False
+                await self.do(scouter.move(self.start_location))
+            else:
+                await self.do(scouter.attack(enemy.position))
+
+        # If no enemies, keep walking around
         enemy_dist = scouter.position.distance_to(self.enemy_start_locations[0])
         start_dist = scouter.position.distance_to(self.start_location)
 
