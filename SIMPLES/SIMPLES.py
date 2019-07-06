@@ -14,6 +14,14 @@ class SIMPLES(sc2.BotAI):
     #TODO build method is fine but it generates lots of log, on every try and fail. Maybe go back to previous way of building?
     hasCombatShield = False
     hasStimPack = False
+    scouter_tag = None
+    scouterGoingEnemy = True
+    scouterNumber = 0
+
+    @property
+    def DIST_THRESHOLD(self):
+        return 5 + (10*self.scouterNumber)
+
     async def on_step(self, iteration):
         await self.Resources_Management()  
         await self.Military_Management()
@@ -24,8 +32,24 @@ class SIMPLES(sc2.BotAI):
         await self.BuilderScout()
     
     async def WalkingScout(self):
-        #print("TODO Walking Scout")
-        return
+        scouter = self.getScouter()
+        if scouter is None:
+            return
+
+        enemy_dist = scouter.position.distance_to(self.enemy_start_locations[0])
+        start_dist = scouter.position.distance_to(self.start_location)
+
+        if self.scouterGoingEnemy and enemy_dist > self.DIST_THRESHOLD:
+            await self.do(scouter.move(self.enemy_start_locations[0]))
+        elif enemy_dist < self.DIST_THRESHOLD:
+            self.scouterGoingEnemy = False
+            await self.do(scouter.move(self.start_location))
+        elif not self.scouterGoingEnemy:
+            if start_dist < self.DIST_THRESHOLD:
+                self.scouterGoingEnemy = True
+                await self.do(scouter.move(self.enemy_start_locations[0]))
+            else:
+                await self.do(scouter.move(self.start_location))
     
     async def BuilderScout(self):
         #print("TODO Builder Scout")
@@ -265,6 +289,29 @@ class SIMPLES(sc2.BotAI):
         else:
             #print("retornou um trabalhador")
             return self.workers.gathering.random
+
+    def getIDLEWorker(self):
+        if self.workers.idle:
+            return self.workers.idle.random
+        return None
+    
+    def getScouter(self):
+        if self.scouter_tag is not None:
+            try:
+                return self.units.by_tag(self.scouter_tag)
+            except:
+                # Had scout but now it's dead
+                self.scouter_tag = None
+                self.scouterGoingEnemy = True
+                self.scouterNumber += 1
+                return self.getScouter()
+
+        idle_worker = self.getIDLEWorker()
+        if idle_worker is not None:
+            self.scouter_tag = idle_worker.tag
+            return self.units.by_tag(self.scouter_tag)
+        return None
+
 
 def main():
     map = random.choice(
