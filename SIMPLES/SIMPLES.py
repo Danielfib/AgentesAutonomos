@@ -23,9 +23,9 @@ class SIMPLES(sc2.BotAI):
         return 5 + (10*self.scouterNumber)
 
     async def on_step(self, iteration):
+        await self.Scout_Management()
         await self.Resources_Management()  
         await self.Military_Management()
-        await self.Scout_Management()
 
     async def Scout_Management(self):
         await self.WalkingScout()
@@ -52,8 +52,25 @@ class SIMPLES(sc2.BotAI):
                 await self.do(scouter.move(self.start_location))
     
     async def BuilderScout(self):
-        #print("TODO Builder Scout")
-        return
+        scouter = self.getScouter()
+        if scouter is None:
+            return
+
+        enemy_dist = scouter.position.distance_to(self.enemy_start_locations[0])
+        start_dist = scouter.position.distance_to(self.start_location)
+
+        # 2 minutes passed                                      try around middle of the map
+        if self.time > 2*60 and self.can_afford(SENSORTOWER) and abs(enemy_dist - start_dist) < 50:
+
+            # Avoid building towers near to each other
+            exist_tower_near = False
+            for tower in self.units(SENSORTOWER):
+                if scouter.position.distance_to(tower.position) < 30:
+                    exist_tower_near = True
+
+            if not exist_tower_near:
+                await self.do(scouter.build(SENSORTOWER, scouter.position))
+
     
     async def Military_Management(self):
         #TODO rally troops in front of base
