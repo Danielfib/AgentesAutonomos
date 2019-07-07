@@ -26,7 +26,7 @@ class SIMPLES(sc2.BotAI):
     async def on_step(self, iteration):
         await self.Scout_Management()
         await self.Resources_Management()  
-        await self.Military_Management()
+        await self.Military_Management(iteration)
 
     async def Scout_Management(self):
         await self.WalkingScout()
@@ -86,9 +86,8 @@ class SIMPLES(sc2.BotAI):
 
             if not exist_tower_near:
                 await self.do(scouter.build(SENSORTOWER, scouter.position))
-
-    
-    async def Military_Management(self):
+  
+    async def Military_Management(self, iteration):
         #TODO rally troops in front of base
         if self.can_afford(MARINE):
             for barrack in self.units(BARRACKS).ready:
@@ -108,7 +107,7 @@ class SIMPLES(sc2.BotAI):
                 
 
         await self.Research()
-        await self.Armies()
+        await self.Armies(iteration)
     
     async def Research(self):
         cc = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND)).first
@@ -137,11 +136,12 @@ class SIMPLES(sc2.BotAI):
                 elif not(UpgradeId.TERRANINFANTRYARMORSLEVEL3 in self.state.upgrades) and self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL3) and not self.already_pending(UpgradeId.TERRANINFANTRYARMORSLEVEL3):
                     await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL3))
 
-    async def Armies(self):
+    async def Armies(self, iteration):
         await self.ArmiesMacro()
-        await self.ArmiesMicro()
+        await self.ArmiesMicro(iteration)
     
     async def ArmiesMacro(self):
+        #TODO: rally troops in a defensive way
         #print("TODO Armies Macro")
         #basic strategy: swarm enemy with all armies
         if self.units(MARINE).amount > 70:
@@ -160,16 +160,16 @@ class SIMPLES(sc2.BotAI):
                 marines = marines.sorted(lambda unit: unit.health + medivac.position.distance_to(unit.position))
                 await self.do(medivac.move(marines.first.position))
 
-    async def ArmiesMicro(self):
+    async def ArmiesMicro(self, iteration):
         #TODO make it so that marines dont block each other 
         
         #use stimpack when attacking, if not already under effect
         if self.hasStimPack:
-            #TODO maybe refactor to improve peformance? 
-            # we could search for a particular enemy unit, instead of iterating all of them
-            for unit in self.known_enemy_units.not_structure:
+            #TODO if enemy moves away from main base, our troops keep gathering there forerever
+            #TODO try to improve performance, this way is almost the same as previou way
+            if iteration % 4 == 0:
                 for marine in self.units(MARINE):
-                    if not marine.has_buff(BuffId.STIMPACK) and marine.health > 20 and marine.target_in_range(unit):
+                    if not marine.has_buff(BuffId.STIMPACK) and marine.health > 20 and self.known_enemy_units.not_structure.in_attack_range_of(marine):
                         await self.do(marine(EFFECT_STIM_MARINE))
 
     async def Resources_Management(self):
@@ -208,7 +208,7 @@ class SIMPLES(sc2.BotAI):
         await self.RampBlocker()        
         
         # build refineries (on nearby vespene) when at least one SUPPLYDEPOT is in construction
-        if self.units(SUPPLYDEPOT).amount > 0 and self.units(REFINERY).amount < 1:
+        if self.units(SUPPLYDEPOT).amount > 0 and self.units(REFINERY).amount < 2:
             for th in self.townhalls:
                 vgs = self.state.vespene_geyser.closer_than(10, th)
                 for vg in vgs:
@@ -222,20 +222,21 @@ class SIMPLES(sc2.BotAI):
             worker = self.getWorker()
             await self.build(ENGINEERINGBAY, near=cc.position.towards(self.game_info.map_center, 10).random_on_distance(4), unit=worker)
 
+        # TODO: Expand right (today expansions may be hard because barracks placement are near next base)
         # expand if we can afford and have less than 2 bases
-        if 1 <= self.townhalls.amount < 2 and self.already_pending(UnitTypeId.COMMANDCENTER) == 0 and self.can_afford(UnitTypeId.COMMANDCENTER):
-            # get_next_expansion returns the center of the mineral fields of the next nearby expansion
-            next_expo = await self.get_next_expansion()
-            # from the center of mineral fields, we need to find a valid place to place the command center
-            location = await self.find_placement(UnitTypeId.COMMANDCENTER, next_expo, placement_step=1)
-            if location:
-                # now we "select" (or choose) the nearest worker to that found location
-                w = self.select_build_worker(location)
-                if w and self.can_afford(UnitTypeId.COMMANDCENTER):
-                    # the worker will be commanded to build the command center
-                    error = await self.do(w.build(UnitTypeId.COMMANDCENTER, location))
-                    if error:
-                        print(error)
+        # if 1 <= self.townhalls.amount < 2 and self.already_pending(UnitTypeId.COMMANDCENTER) == 0 and self.can_afford(UnitTypeId.COMMANDCENTER):
+        #     # get_next_expansion returns the center of the mineral fields of the next nearby expansion
+        #     next_expo = await self.get_next_expansion()
+        #     # from the center of mineral fields, we need to find a valid place to place the command center
+        #     location = await self.find_placement(UnitTypeId.COMMANDCENTER, next_expo, placement_step=1)
+        #     if location:
+        #         # now we "select" (or choose) the nearest worker to that found location
+        #         w = self.select_build_worker(location)
+        #         if w and self.can_afford(UnitTypeId.COMMANDCENTER):
+        #             # the worker will be commanded to build the command center
+        #             error = await self.do(w.build(UnitTypeId.COMMANDCENTER, location))
+        #             if error:
+        #                 print(error)
 
         # manage supplies
         if self.supply_left < 6 and self.supply_used >= 14 and self.can_afford(SUPPLYDEPOT) and self.units(SUPPLYDEPOT).not_ready.amount + self.already_pending(SUPPLYDEPOT) < 1:
@@ -258,11 +259,12 @@ class SIMPLES(sc2.BotAI):
         #TODO find a way to dont build barracks when add-on cant be built
         #sometimes barracks are built without space to add-ons
         #build 2 barracks, excluding the one from the ramp
-        if self.units(BARRACKS).amount < 3 and self.units(BARRACKS).amount > 0 and self.can_afford(BARRACKS):
+        #barracks are 3x3 and with addon are basically 3x5
+        if (self.units(BARRACKS).amount + self.already_pending(BARRACKS)) < 3 and self.units(BARRACKS).amount > 0 and self.can_afford(BARRACKS) and self.units(ORBITALCOMMAND).amount > 0:
             worker = self.getWorker()
             next_expo = await self.get_next_expansion()
-            location = await self.find_placement(UnitTypeId.BARRACKS, next_expo, placement_step=1)
-            await self.build(BARRACKS, near=cc.position.towards(location, 20).random_on_distance(4), unit=worker)
+            location = await self.find_placement(UnitTypeId.COMMANDCENTER, next_expo, placement_step=1)
+            await self.build(BARRACKS, near=location, unit=worker)
 
         #every other barrack than the lab barrack should have reactor
         if self.units(BARRACKS).ready.amount > 1:
@@ -287,6 +289,9 @@ class SIMPLES(sc2.BotAI):
                     await self.do(depo(MORPH_SUPPLYDEPOT_RAISE))
                     break
 
+        if self.units(BARRACKSTECHLAB).amount > 0:
+            return
+
         depot_placement_positions = self.main_base_ramp.corner_depots
 
         barracks_placement_position = self.main_base_ramp.barracks_correct_placement
@@ -299,17 +304,15 @@ class SIMPLES(sc2.BotAI):
 
         # Build depots
         if self.can_afford(SUPPLYDEPOT) and not self.already_pending(SUPPLYDEPOT):
-            if len(depot_placement_positions) == 0:
-                return
-            # Choose any depot location
-            target_depot_location = depot_placement_positions.pop()                            
-            await self.do(self.getWorker().build(SUPPLYDEPOT, target_depot_location))
+            if len(depot_placement_positions) != 0:    
+                target_depot_location = depot_placement_positions.pop()                            
+                await self.do(self.getWorker().build(SUPPLYDEPOT, target_depot_location))
 
         # Build barracks
         if self.can_afford(BARRACKS):
             if self.units(BARRACKS).amount + self.already_pending(BARRACKS) > 0:
                 return            
-            if barracks_placement_position:  # if workers were found              
+            if barracks_placement_position:  # if workers were found           
                 await self.do(self.getWorker().build(BARRACKS, barracks_placement_position))
 
         #barracks reactor upgrade on ramp
