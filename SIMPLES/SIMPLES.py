@@ -19,6 +19,9 @@ class SIMPLES(sc2.BotAI):
     scouterGoingEnemy = True
     scouterNumber = 0
 
+    lastAttack = 0
+    lastPatrol = 0
+
     @property
     def DIST_THRESHOLD(self):
         return 5 + (10*self.scouterNumber)
@@ -122,11 +125,13 @@ class SIMPLES(sc2.BotAI):
         await self.Research()
         await self.Armies()
 
-        try:
-            barrack = self.units(BARRACKS).furthest_to(self.start_location)
-            await self.do_actions([marine.move(barrack.position.random_on_distance(5)) for marine in self.units(MARINE).idle])
-        except:
-            await self.do_actions([marine.move(self.start_location) for marine in self.units(MARINE).idle])
+        if self.time - self.lastPatrol > 10:
+            self.lastPatrol = self.time
+            try:
+                barrack = self.units(BARRACKS).furthest_to(self.start_location)
+                await self.do_actions([marine.move(barrack.position.random_on_distance(5)) for marine in self.units(MARINE).idle])
+            except:
+                await self.do_actions([marine.move(self.start_location) for marine in self.units(MARINE).idle])
     
     async def Research(self):
         cc = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND)).first
@@ -160,10 +165,17 @@ class SIMPLES(sc2.BotAI):
         await self.ArmiesMicro()
     
     async def ArmiesMacro(self):
-        if self.units(MARINE).amount > 70:
+        if self.units(MARINE).amount > 70 and (self.time - self.lastAttack > 5):
+            self.lastAttack = self.time
             all_positions = [item.position for sublist in [self.known_enemy_units, self.known_enemy_structures] for item in sublist]
             attack_position = Point2.center(all_positions + [self.enemy_start_locations[0]])
-            actions = [marine.attack(attack_position) for marine in self.units(MARINE) if not marine.is_attacking]
+            enemy_struct = self.known_enemy_structures.closest_to(attack_position)
+            enemy_unit = self.known_enemy_units.closest_to(attack_position)
+            if enemy_unit.position.distance_to(attack_position) < enemy_struct.position.distance_to(attack_position):
+                actions = [marine.attack(enemy_unit.position) for marine in self.units(MARINE) if not marine.is_attacking]
+            else:
+                actions = [marine.attack(enemy_struct.position) for marine in self.units(MARINE) if not marine.is_attacking]
+
             await self.do_actions(actions)
 
         #make medivac follow marines
@@ -381,14 +393,14 @@ def main():
         [
             #"CatalystLE"
             # # Most maps have 2 upper points at the ramp (len(self.main_base_ramp.upper) == 2)
-             "AutomatonLE",
-             "BlueshiftLE",
-             "CeruleanFallLE",
-             "KairosJunctionLE",
+             #"AutomatonLE",
+             #"BlueshiftLE",
+             #"CeruleanFallLE",
+             #"KairosJunctionLE",
              "ParaSiteLE",
-             "PortAleksanderLE",
-             "StasisLE",
-             "DarknessSanctuaryLE",
+             #"PortAleksanderLE",
+             #"StasisLE",
+             #"DarknessSanctuaryLE",
             # #"SequencerLE", # Upper right has a different ramp top
             # "ParaSiteLE",  # Has 5 upper points at the main ramp
             # #"AcolyteLE",  # Has 4 upper points at the ramp to the in-base natural and 2 upper points at the small ramp
@@ -397,7 +409,7 @@ def main():
     )
     sc2.run_game(sc2.maps.get(map), [
             Bot(Race.Terran, SIMPLES()), 
-            Computer(Race.Terran, Difficulty.VeryEasy)
+            Computer(Race.Terran, Difficulty.Easy)
         ], realtime=False
     )
     
