@@ -33,7 +33,7 @@ class SIMPLES(sc2.BotAI):
         await self.DefendMainBase()
 
     async def DefendMainBase(self):
-        close_enemies = self.state.units.closer_than(40, self.start_location).enemy
+        close_enemies = self.known_enemy_units.closer_than(40, self.start_location)
 
         if close_enemies.amount > 3:
             enemy_center = Point2.center([enemy.position for enemy in close_enemies])
@@ -51,7 +51,7 @@ class SIMPLES(sc2.BotAI):
             return
 
         # If enemies found, run or fight
-        close_enemies = self.state.units.closer_than(15, scouter.position).enemy
+        close_enemies = self.known_enemy_units.closer_than(15, scouter.position)
         if close_enemies.amount > 1:
             self.scouterGoingEnemy = False
             await self.do(scouter.move(self.start_location))
@@ -160,11 +160,10 @@ class SIMPLES(sc2.BotAI):
         await self.ArmiesMicro()
     
     async def ArmiesMacro(self):
-        #TODO: rally troops in a defensive way
-        #print("TODO Armies Macro")
-        #basic strategy: swarm enemy with all armies
         if self.units(MARINE).amount > 70:
-            actions = [marine.attack(self.enemy_start_locations[0]) for marine in self.units(MARINE) if not marine.is_attacking]
+            all_positions = [item.position for sublist in [self.known_enemy_units, self.known_enemy_structures] for item in sublist]
+            attack_position = Point2.center(all_positions + [self.enemy_start_locations[0]])
+            actions = [marine.attack(attack_position) for marine in self.units(MARINE) if not marine.is_attacking]
             await self.do_actions(actions)
 
         #make medivac follow marines
