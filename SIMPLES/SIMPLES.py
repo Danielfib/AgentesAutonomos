@@ -33,14 +33,13 @@ class SIMPLES(sc2.BotAI):
         await self.DefendMainBase()
 
     async def DefendMainBase(self):
-        close_enemies = self.state.units.closer_than(40, self.start_location).filter(lambda unit: unit.is_enemy)
+        close_enemies = self.state.units.closer_than(40, self.start_location).enemy
 
         if close_enemies.amount > 3:
             enemy_center = Point2.center([enemy.position for enemy in close_enemies])
 
             defensors = self.units(MARINE).sorted(lambda unit: unit.distance_to(enemy_center)).take(close_enemies.amount + 10)
             await self.do_actions([defensor.attack(enemy_center) for defensor in defensors])
-
 
     async def Scout_Management(self):
         await self.WalkingScout()
@@ -52,7 +51,7 @@ class SIMPLES(sc2.BotAI):
             return
 
         # If enemies found, run or fight
-        close_enemies = self.state.units.closer_than(15, scouter.position).filter(lambda unit: unit.is_enemy)
+        close_enemies = self.state.units.closer_than(15, scouter.position).enemy
         if close_enemies.amount > 1:
             self.scouterGoingEnemy = False
             await self.do(scouter.move(self.start_location))
@@ -123,6 +122,12 @@ class SIMPLES(sc2.BotAI):
 
         await self.Research()
         await self.Armies()
+
+        try:
+            barrack = self.units(BARRACKS).furthest_to(self.start_location)
+            await self.do_actions([marine.move(barrack.position.random_on_distance(5)) for marine in self.units(MARINE).idle])
+        except:
+            await self.do_actions([marine.move(self.start_location) for marine in self.units(MARINE).idle])
     
     async def Research(self):
         cc = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND)).first
