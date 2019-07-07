@@ -125,16 +125,16 @@ class SIMPLES(sc2.BotAI):
         for idleBay in self.units(ENGINEERINGBAY).idle:
             if not(UpgradeId.TERRANINFANTRYWEAPONSLEVEL1 in self.state.upgrades) and self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL1) and not self.already_pending_upgrade(UpgradeId.TERRANINFANTRYWEAPONSLEVEL1):
                 await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL1))
-            if not(UpgradeId.TERRANINFANTRYARMORSLEVEL1 in self.state.upgrades) and self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL1) and not self.already_pending_upgrade(UpgradeId.TERRANINFANTRYARMORSLEVEL1):
+            elif not(UpgradeId.TERRANINFANTRYARMORSLEVEL1 in self.state.upgrades) and self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL1) and not self.already_pending_upgrade(UpgradeId.TERRANINFANTRYARMORSLEVEL1):
                 await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL1))
-            if self.units(ARMORY).ready:
+            elif self.units(ARMORY).ready and self.hasStimPack and self.hasCombatShield: #stablish research priority
                 if not(UpgradeId.TERRANINFANTRYWEAPONSLEVEL2 in self.state.upgrades) and self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL2) and not self.already_pending(UpgradeId.TERRANINFANTRYWEAPONSLEVEL2):
                     await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL2))
-                if not(UpgradeId.TERRANINFANTRYARMORSLEVEL2 in self.state.upgrades) and  self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL2) and not self.already_pending(UpgradeId.TERRANINFANTRYARMORSLEVEL2):
+                elif not(UpgradeId.TERRANINFANTRYARMORSLEVEL2 in self.state.upgrades) and  self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL2) and not self.already_pending(UpgradeId.TERRANINFANTRYARMORSLEVEL2):
                     await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL2))
-                if not(UpgradeId.TERRANINFANTRYWEAPONSLEVEL3 in self.state.upgrades) and self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL3) and not self.already_pending(UpgradeId.TERRANINFANTRYWEAPONSLEVEL3):
+                elif not(UpgradeId.TERRANINFANTRYWEAPONSLEVEL3 in self.state.upgrades) and self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL3) and not self.already_pending(UpgradeId.TERRANINFANTRYWEAPONSLEVEL3):
                     await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL3))
-                if not(UpgradeId.TERRANINFANTRYARMORSLEVEL3 in self.state.upgrades) and self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL3) and not self.already_pending(UpgradeId.TERRANINFANTRYARMORSLEVEL3):
+                elif not(UpgradeId.TERRANINFANTRYARMORSLEVEL3 in self.state.upgrades) and self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL3) and not self.already_pending(UpgradeId.TERRANINFANTRYARMORSLEVEL3):
                     await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL3))
 
     async def Armies(self):
@@ -191,9 +191,10 @@ class SIMPLES(sc2.BotAI):
                 await self.do(oc(CALLDOWNMULE_CALLDOWNMULE, mf))
 
         #upgrade command centers to orbital command
-        for cc in self.units(COMMANDCENTER):
-            if self.can_afford(ORBITALCOMMAND) and cc.is_idle:
-                await self.do(cc(UPGRADETOORBITAL_ORBITALCOMMAND))
+        if self.units(BARRACKS).ready.amount > 0:
+            for cc in self.units(COMMANDCENTER).ready:
+                if self.can_afford(ORBITALCOMMAND) and cc.is_idle and not self.already_pending(ORBITALCOMMAND):
+                    await self.do(cc(UPGRADETOORBITAL_ORBITALCOMMAND))
 
         await self.distribute_workers()
         
@@ -243,35 +244,32 @@ class SIMPLES(sc2.BotAI):
             await self.do(worker.build(SUPPLYDEPOT, loc))
 
         #building research buildings
-        if self.units(FACTORY).amount + self.already_pending(FACTORY) == 0 and self.can_afford(FACTORY):
+        if self.units(FACTORY).amount + self.already_pending(FACTORY) == 0 and self.can_afford(FACTORY) and self.units(BARRACKS).ready.amount > 0:
             worker = self.getWorker()
             await self.build(FACTORY, near=cc.position.towards(self.game_info.map_center, 10).random_on_distance(4), unit=worker)
-        elif self.units(ARMORY).amount + self.already_pending(ARMORY) == 0 and self.can_afford(ARMORY):
+        elif self.units(ARMORY).amount + self.already_pending(ARMORY) == 0 and self.can_afford(ARMORY) and self.units(FACTORY).ready.amount > 0:
             worker = self.getWorker()
             await self.build(ARMORY, near=cc.position.towards(self.game_info.map_center, 10).random_on_distance(4), unit=worker)
+        
+        if self.units(STARPORT).amount == 0 and self.can_afford(STARPORT) and self.units(FACTORY).ready.amount > 0:
+            worker = self.getWorker()
+            await self.build(STARPORT, near=cc.position.towards(self.game_info.map_center, 10).random_on_distance(4), unit=worker)
         
         #TODO find a way to dont build barracks when add-on cant be built
         #sometimes barracks are built without space to add-ons
         #build 2 barracks, excluding the one from the ramp
-        if self.units(BARRACKS).amount < 3 and self.can_afford(BARRACKS):
+        if self.units(BARRACKS).amount < 3 and self.units(BARRACKS).amount > 0 and self.can_afford(BARRACKS):
             worker = self.getWorker()
             next_expo = await self.get_next_expansion()
             location = await self.find_placement(UnitTypeId.BARRACKS, next_expo, placement_step=1)
             await self.build(BARRACKS, near=cc.position.towards(location, 20).random_on_distance(4), unit=worker)
 
         #every other barrack than the lab barrack should have reactor
-        for rax in self.units(BARRACKS).ready:
-            #print(rax.add_on_tag)
-            if self.units(BARRACKSTECHLAB).amount == 0 and rax.add_on_tag == 0:
-                if self.can_afford(BARRACKSTECHLAB):
-                    await self.do(rax(BUILD_TECHLAB_BARRACKS))
-            elif rax.add_on_tag == 0 and self.can_afford(BARRACKSREACTOR):            
-                await self.do(rax(BUILD_REACTOR_BARRACKS))            
-
-        #TODO check pre requirement to build a starport
-        if self.units(STARPORT).amount == 0 and self.can_afford(STARPORT):
-            worker = self.getWorker()
-            await self.build(STARPORT, near=cc.position.towards(self.game_info.map_center, 10).random_on_distance(4), unit=worker)
+        if self.units(BARRACKS).ready.amount > 1:
+            for rax in self.units(BARRACKS).ready:
+                #print(rax.add_on_tag)
+                if rax.add_on_tag == 0 and self.can_afford(BARRACKSREACTOR):            
+                    await self.do(rax(BUILD_REACTOR_BARRACKS))         
 
     async def RampBlocker(self):
         # Raise depos when enemies are nearby
@@ -308,17 +306,17 @@ class SIMPLES(sc2.BotAI):
             await self.do(self.getWorker().build(SUPPLYDEPOT, target_depot_location))
 
         # Build barracks
-        if self.can_afford(BARRACKS) and not self.already_pending(BARRACKS):
+        if self.can_afford(BARRACKS):
             if self.units(BARRACKS).amount + self.already_pending(BARRACKS) > 0:
                 return            
             if barracks_placement_position:  # if workers were found              
                 await self.do(self.getWorker().build(BARRACKS, barracks_placement_position))
 
         #barracks reactor upgrade on ramp
-        if self.units(BARRACKSREACTOR).amount < 1 and self.units(BARRACKS).amount > 0:
-            for barrack in self.units(BARRACKS).ready:
-                if barrack.add_on_tag == 0:
-                    await self.do(barrack(BUILD_REACTOR_BARRACKS))
+        if self.units(BARRACKSTECHLAB).amount < 1 and self.units(BARRACKS).ready.amount > 0 and self.can_afford(BARRACKSTECHLAB) and not self.already_pending(BARRACKSTECHLAB):
+            barrack = self.units(BARRACKS).ready.first
+            if barrack.add_on_tag == 0:
+                await self.do(barrack(BUILD_TECHLAB_BARRACKS))
 
     def getWorker(self):
         if self.workers.idle:
@@ -372,7 +370,7 @@ def main():
     )
     sc2.run_game(sc2.maps.get(map), [
             Bot(Race.Terran, SIMPLES()), 
-            Computer(Race.Terran, Difficulty.Medium)
+            Computer(Race.Terran, Difficulty.Hard)
         ], realtime=False
     )
     
