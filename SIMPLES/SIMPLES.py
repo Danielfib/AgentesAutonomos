@@ -18,6 +18,7 @@ class SIMPLES(sc2.BotAI):
     scouter_tag = None
     scouterGoingEnemy = True
     scouterNumber = 0
+    barracksWithLabTag = 0
 
     lastAttack = 0
     lastPatrol = 0
@@ -106,14 +107,17 @@ class SIMPLES(sc2.BotAI):
     async def Military_Management(self, iteration):
         #TODO rally troops in front of base
         if self.can_afford(MARINE):
-            for barrack in self.units(BARRACKS).ready:
-                if(barrack.is_idle) and self.supply_left > 1:
-                    await self.do(barrack(BARRACKSTRAIN_MARINE))
-                                        
-                    if(barrack.add_on_tag != 0) and self.can_afford(MARINE):
-                        #TODO discover what is the add_on_tag for reactor, to build 2 at a time on reactors
+            for barrack in self.units(BARRACKS).ready.idle:
+                if self.supply_left > 2:
+                    if (barrack.tag == self.barracksWithLabTag):
+                        if self.can_afford(MARAUDER):
+                            await self.do(barrack(BARRACKSTRAIN_MARAUDER))
+                        else:
+                            await self.do(barrack(BARRACKSTRAIN_MARINE))
+                    else:
                         await self.do(barrack(BARRACKSTRAIN_MARINE))
-                        #print("")
+                        if self.can_afford(MARINE):
+                            await self.do(barrack(BARRACKSTRAIN_MARINE))
 
         if self.can_afford(MEDIVAC) and self.units(STARPORT).amount > 0:
             if self.units(MEDIVAC).amount < self.units(MARINE).amount/8:
@@ -145,7 +149,7 @@ class SIMPLES(sc2.BotAI):
                 await self.do(self.units(BARRACKSTECHLAB).first(BARRACKSTECHLABRESEARCH_STIMPACK))    
                 self.hasStimPack = True
 
-        for idleBay in self.units(ENGINEERINGBAY).idle:
+        for idleBay in self.units(ENGINEERINGBAY).ready.idle:
             if not(UpgradeId.TERRANINFANTRYWEAPONSLEVEL1 in self.state.upgrades) and self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL1) and not self.already_pending_upgrade(UpgradeId.TERRANINFANTRYWEAPONSLEVEL1):
                 await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL1))
             elif not(UpgradeId.TERRANINFANTRYARMORSLEVEL1 in self.state.upgrades) and self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL1) and not self.already_pending_upgrade(UpgradeId.TERRANINFANTRYARMORSLEVEL1):
@@ -208,7 +212,7 @@ class SIMPLES(sc2.BotAI):
     async def Collector(self):
         #print("TODO Collector")
         # manage collectors
-        for center in self.townhalls:
+        for center in self.townhalls.ready:
             if center.ideal_harvesters > center.assigned_harvesters-1 and self.can_afford(SCV) and center.is_idle:
                 await self.do(center.train(SCV))
 
@@ -244,7 +248,7 @@ class SIMPLES(sc2.BotAI):
         ccs = self.units(COMMANDCENTER).amount + self.units(ORBITALCOMMAND).amount
         if ccs > 1:
             refineriesToBuild = 2
-        if self.units(SUPPLYDEPOT).amount > 0 and self.units(REFINERY).amount < refineriesToBuild:
+        if self.units(SUPPLYDEPOT).amount > 0 and self.units(REFINERY).amount < refineriesToBuild and self.units(REFINERY).amount < 3:
             for th in self.townhalls:
                 vgs = self.state.vespene_geyser.closer_than(10, th)
                 for vg in vgs:
@@ -281,7 +285,7 @@ class SIMPLES(sc2.BotAI):
             await self.do(worker.build(SUPPLYDEPOT, loc))
 
         #building research buildings
-        if self.units(FACTORY).amount + self.already_pending(FACTORY) == 0 and self.can_afford(FACTORY) and self.units(BARRACKS).ready.amount > 1:
+        if self.units(FACTORY).amount + self.already_pending(FACTORY) == 0 and self.can_afford(FACTORY) and self.units(BARRACKS).ready.amount > 2:
             worker = self.getWorker()
             await self.build(FACTORY, near=cc.position.towards(self.game_info.map_center, 10).random_on_distance(4), unit=worker)
         elif self.units(ARMORY).amount + self.already_pending(ARMORY) == 0 and self.can_afford(ARMORY) and self.units(FACTORY).ready.amount > 0:
@@ -297,7 +301,7 @@ class SIMPLES(sc2.BotAI):
         #build 2 barracks, excluding the one from the ramp
         #barracks are 3x3 and with addon are basically 3x5
         if (self.already_pending(COMMANDCENTER) + ccs) > 1:
-            if (self.units(BARRACKS).amount + self.already_pending(BARRACKS)) < 3 and self.units(BARRACKS).amount > 0 and self.can_afford(BARRACKS) and self.units(ORBITALCOMMAND).amount > 0:
+            if (self.units(BARRACKS).amount + self.already_pending(BARRACKS)) < 4 and self.units(BARRACKS).amount > 0 and self.can_afford(BARRACKS) and self.units(ORBITALCOMMAND).amount > 0:
                 worker = self.getWorker()
                 next_expo = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND)).first.position
                 location = await self.find_placement(UnitTypeId.COMMANDCENTER, next_expo, placement_step=1)
@@ -355,6 +359,7 @@ class SIMPLES(sc2.BotAI):
         if self.units(BARRACKSTECHLAB).amount < 1 and self.units(BARRACKS).ready.amount > 0 and self.can_afford(BARRACKSTECHLAB) and not self.already_pending(BARRACKSTECHLAB):
             barrack = self.units(BARRACKS).ready.first
             if barrack.add_on_tag == 0:
+                self.barracksWithLabTag = barrack.tag
                 await self.do(barrack(BUILD_TECHLAB_BARRACKS))
 
     def getWorker(self):
@@ -393,23 +398,23 @@ def main():
         [
             #"CatalystLE"
             # # Most maps have 2 upper points at the ramp (len(self.main_base_ramp.upper) == 2)
-             #"AutomatonLE",
-             #"BlueshiftLE",
-             #"CeruleanFallLE",
-             #"KairosJunctionLE",
+             "AutomatonLE",
+             "BlueshiftLE",
+             "CeruleanFallLE",
+             "KairosJunctionLE",
              "ParaSiteLE",
-             #"PortAleksanderLE",
-             #"StasisLE",
-             #"DarknessSanctuaryLE",
-            # #"SequencerLE", # Upper right has a different ramp top
-            # "ParaSiteLE",  # Has 5 upper points at the main ramp
-            # #"AcolyteLE",  # Has 4 upper points at the ramp to the in-base natural and 2 upper points at the small ramp
+             "PortAleksanderLE",
+             "StasisLE",
+            # "DarknessSanctuaryLE",
+            "SequencerLE", # Upper right has a different ramp top
+            "ParaSiteLE",  # Has 5 upper points at the main ramp
+            #"AcolyteLE",  # Has 4 upper points at the ramp to the in-base natural and 2 upper points at the small ramp
             # #"HonorgroundsLE",  # Has 4 or 9 upper points at the large main base ramp
         ]
     )
     sc2.run_game(sc2.maps.get(map), [
             Bot(Race.Terran, SIMPLES()), 
-            Computer(Race.Terran, Difficulty.Easy)
+            Computer(Race.Terran, Difficulty.Hard)
         ], realtime=False
     )
     
