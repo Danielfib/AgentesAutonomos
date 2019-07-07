@@ -180,7 +180,7 @@ class SIMPLES(sc2.BotAI):
         #print("TODO Collector")
         # manage collectors
         for center in self.townhalls:
-            if center.ideal_harvesters > center.assigned_harvesters and self.can_afford(SCV) and center.is_idle:
+            if center.ideal_harvesters > center.assigned_harvesters-1 and self.can_afford(SCV) and center.is_idle:
                 await self.do(center.train(SCV))
 
         # manage orbital energy and drop mules
@@ -208,7 +208,11 @@ class SIMPLES(sc2.BotAI):
         await self.RampBlocker()        
         
         # build refineries (on nearby vespene) when at least one SUPPLYDEPOT is in construction
-        if self.units(SUPPLYDEPOT).amount > 0 and self.units(REFINERY).amount < 2:
+        refineriesToBuild = 1
+        ccs = self.units(COMMANDCENTER).amount + self.units(ORBITALCOMMAND).amount
+        if ccs > 1:
+            refineriesToBuild = 2
+        if self.units(SUPPLYDEPOT).amount > 0 and self.units(REFINERY).amount < refineriesToBuild:
             for th in self.townhalls:
                 vgs = self.state.vespene_geyser.closer_than(10, th)
                 for vg in vgs:
@@ -216,27 +220,27 @@ class SIMPLES(sc2.BotAI):
                         # caution: the target for the refinery has to be the vespene geyser, not its position!
                         await self.do(self.getWorker().build(REFINERY, vg))
 
-        cc = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND)).first
+        cc = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND))[-1]
 
-        if self.units(BARRACKSREACTOR).amount > 0 and self.units(ENGINEERINGBAY).amount < 2 and self.can_afford(ENGINEERINGBAY):
+        if self.units(BARRACKSREACTOR).amount > 0 and (self.already_pending(ENGINEERINGBAY) + self.units(ENGINEERINGBAY).amount) < 2 and self.can_afford(ENGINEERINGBAY):
             worker = self.getWorker()
             await self.build(ENGINEERINGBAY, near=cc.position.towards(self.game_info.map_center, 10).random_on_distance(4), unit=worker)
 
         # TODO: Expand right (today expansions may be hard because barracks placement are near next base)
-        # expand if we can afford and have less than 2 bases
-        # if 1 <= self.townhalls.amount < 2 and self.already_pending(UnitTypeId.COMMANDCENTER) == 0 and self.can_afford(UnitTypeId.COMMANDCENTER):
-        #     # get_next_expansion returns the center of the mineral fields of the next nearby expansion
-        #     next_expo = await self.get_next_expansion()
-        #     # from the center of mineral fields, we need to find a valid place to place the command center
-        #     location = await self.find_placement(UnitTypeId.COMMANDCENTER, next_expo, placement_step=1)
-        #     if location:
-        #         # now we "select" (or choose) the nearest worker to that found location
-        #         w = self.select_build_worker(location)
-        #         if w and self.can_afford(UnitTypeId.COMMANDCENTER):
-        #             # the worker will be commanded to build the command center
-        #             error = await self.do(w.build(UnitTypeId.COMMANDCENTER, location))
-        #             if error:
-        #                 print(error)
+        #expand if we can afford and have less than 2 bases
+        if 1 <= self.townhalls.amount < 2 and self.already_pending(UnitTypeId.COMMANDCENTER) == 0 and self.can_afford(UnitTypeId.COMMANDCENTER):
+            # get_next_expansion returns the center of the mineral fields of the next nearby expansion
+            next_expo = await self.get_next_expansion()
+            # from the center of mineral fields, we need to find a valid place to place the command center
+            location = await self.find_placement(UnitTypeId.COMMANDCENTER, next_expo, placement_step=1)
+            if location:
+                # now we "select" (or choose) the nearest worker to that found location
+                w = self.select_build_worker(location)
+                if w and self.can_afford(UnitTypeId.COMMANDCENTER):
+                    # the worker will be commanded to build the command center
+                    error = await self.do(w.build(UnitTypeId.COMMANDCENTER, location))
+                    if error:
+                        print(error)
 
         # manage supplies
         if self.supply_left < 6 and self.supply_used >= 14 and self.can_afford(SUPPLYDEPOT) and self.units(SUPPLYDEPOT).not_ready.amount + self.already_pending(SUPPLYDEPOT) < 1:
@@ -245,7 +249,7 @@ class SIMPLES(sc2.BotAI):
             await self.do(worker.build(SUPPLYDEPOT, loc))
 
         #building research buildings
-        if self.units(FACTORY).amount + self.already_pending(FACTORY) == 0 and self.can_afford(FACTORY) and self.units(BARRACKS).ready.amount > 0:
+        if self.units(FACTORY).amount + self.already_pending(FACTORY) == 0 and self.can_afford(FACTORY) and self.units(BARRACKS).ready.amount > 1:
             worker = self.getWorker()
             await self.build(FACTORY, near=cc.position.towards(self.game_info.map_center, 10).random_on_distance(4), unit=worker)
         elif self.units(ARMORY).amount + self.already_pending(ARMORY) == 0 and self.can_afford(ARMORY) and self.units(FACTORY).ready.amount > 0:
@@ -260,11 +264,12 @@ class SIMPLES(sc2.BotAI):
         #sometimes barracks are built without space to add-ons
         #build 2 barracks, excluding the one from the ramp
         #barracks are 3x3 and with addon are basically 3x5
-        if (self.units(BARRACKS).amount + self.already_pending(BARRACKS)) < 3 and self.units(BARRACKS).amount > 0 and self.can_afford(BARRACKS) and self.units(ORBITALCOMMAND).amount > 0:
-            worker = self.getWorker()
-            next_expo = await self.get_next_expansion()
-            location = await self.find_placement(UnitTypeId.COMMANDCENTER, next_expo, placement_step=1)
-            await self.build(BARRACKS, near=location, unit=worker)
+        if (self.already_pending(COMMANDCENTER) + ccs) > 1:
+            if (self.units(BARRACKS).amount + self.already_pending(BARRACKS)) < 3 and self.units(BARRACKS).amount > 0 and self.can_afford(BARRACKS) and self.units(ORBITALCOMMAND).amount > 0:
+                worker = self.getWorker()
+                next_expo = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND)).first.position
+                location = await self.find_placement(UnitTypeId.COMMANDCENTER, next_expo, placement_step=1)
+                await self.build(BARRACKS, near=location, unit=worker)
 
         #every other barrack than the lab barrack should have reactor
         if self.units(BARRACKS).ready.amount > 1:
@@ -310,10 +315,9 @@ class SIMPLES(sc2.BotAI):
 
         # Build barracks
         if self.can_afford(BARRACKS):
-            if self.units(BARRACKS).amount + self.already_pending(BARRACKS) > 0:
-                return            
-            if barracks_placement_position:  # if workers were found           
-                await self.do(self.getWorker().build(BARRACKS, barracks_placement_position))
+            if self.units(BARRACKS).amount + self.already_pending(BARRACKS) == 0:
+                if barracks_placement_position:  # if workers were found           
+                    await self.do(self.getWorker().build(BARRACKS, barracks_placement_position))
 
         #barracks reactor upgrade on ramp
         if self.units(BARRACKSTECHLAB).amount < 1 and self.units(BARRACKS).ready.amount > 0 and self.can_afford(BARRACKSTECHLAB) and not self.already_pending(BARRACKSTECHLAB):
@@ -357,14 +361,14 @@ def main():
         [
             #"CatalystLE"
             # # Most maps have 2 upper points at the ramp (len(self.main_base_ramp.upper) == 2)
-             #"AutomatonLE",
-             #"BlueshiftLE",
-             #"CeruleanFallLE",
-             #"KairosJunctionLE",
+             "AutomatonLE",
+             "BlueshiftLE",
+             "CeruleanFallLE",
+             "KairosJunctionLE",
              "ParaSiteLE",
-             #"PortAleksanderLE",
-             #"StasisLE",
-            # #"DarknessSanctuaryLE",
+             "PortAleksanderLE",
+             "StasisLE",
+             "DarknessSanctuaryLE",
             # #"SequencerLE", # Upper right has a different ramp top
             # "ParaSiteLE",  # Has 5 upper points at the main ramp
             # #"AcolyteLE",  # Has 4 upper points at the ramp to the in-base natural and 2 upper points at the small ramp
@@ -373,7 +377,7 @@ def main():
     )
     sc2.run_game(sc2.maps.get(map), [
             Bot(Race.Terran, SIMPLES()), 
-            Computer(Race.Terran, Difficulty.Hard)
+            Computer(Race.Terran, Difficulty.VeryEasy)
         ], realtime=False
     )
     
