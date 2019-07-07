@@ -214,7 +214,10 @@ class SIMPLES(sc2.BotAI):
                 if self.can_afford(ORBITALCOMMAND) and cc.is_idle and not self.already_pending(ORBITALCOMMAND):
                     await self.do(cc(UPGRADETOORBITAL_ORBITALCOMMAND))
 
-        await self.distribute_workers()
+        try:
+            await self.distribute_workers()
+        except:
+            pass
         
         for a in self.units(REFINERY):
             if a.assigned_harvesters < a.ideal_harvesters:
@@ -349,7 +352,7 @@ class SIMPLES(sc2.BotAI):
             return self.workers.idle.random
         else:
             #print("retornou um trabalhador")
-            return self.workers.gathering.random
+            return self.workers.random
 
     def getIDLEWorker(self):
         if self.workers.idle:
