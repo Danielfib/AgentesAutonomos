@@ -164,20 +164,17 @@ class SIMPLES(sc2.BotAI):
         #print("TODO Armies Macro")
         #basic strategy: swarm enemy with all armies
         if self.units(MARINE).amount > 70:
-            for marine in self.units(MARINE):
-                if not marine.is_attacking:
-                    await self.do(marine.attack(self.enemy_start_locations[0]))
+            actions = [marine.attack(self.enemy_start_locations[0]) for marine in self.units(MARINE) if not marine.is_attacking]
+            await self.do_actions(actions)
 
         #make medivac follow marines
-        for medivac in self.units(MEDIVAC):
-            if medivac.is_idle:
-                marines = self.units(MARINE)
-                if marines.amount == 0:
-                    await self.do(medivac.move(self.start_location))
-                    continue
-                
-                marines = marines.sorted(lambda unit: unit.health + medivac.position.distance_to(unit.position))
-                await self.do(medivac.move(marines.first.position))
+        marines = self.units(MARINE)
+        medivacs = self.units(MEDIVAC)
+        if marines.amount == 0:
+            await self.do_actions([medivac.move(self.start_location) for medivac in medivacs])
+        else:
+            actions = [medivac.move(marines.sorted(lambda unit: unit.health + medivac.position.distance_to(unit.position)).first.position) for medivac in medivacs]
+            await self.do_actions(actions)
 
     async def ArmiesMicro(self):
         #TODO make it so that marines dont block each other 
@@ -187,9 +184,11 @@ class SIMPLES(sc2.BotAI):
             #TODO maybe refactor to improve peformance? 
             # we could search for a particular enemy unit, instead of iterating all of them
             for unit in self.known_enemy_units.not_structure:
-                for marine in self.units(MARINE):
-                    if not marine.has_buff(BuffId.STIMPACK) and marine.health > 20 and marine.target_in_range(unit):
-                        await self.do(marine(EFFECT_STIM_MARINE))
+                actions = [marine(EFFECT_STIM_MARINE) for marine in self.units(MARINE) 
+                    if not marine.has_buff(BuffId.STIMPACK) 
+                        and marine.health > 20 
+                        and marine.target_in_range(unit)]
+                await self.do_actions(actions)
 
     async def Resources_Management(self):
         await self.Collector()
