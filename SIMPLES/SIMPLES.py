@@ -42,7 +42,8 @@ class SIMPLES(sc2.BotAI):
         if close_enemies.amount > 3:
             enemy_center = Point2.center([enemy.position for enemy in close_enemies])
 
-            defensors = self.units(MARINE).sorted(lambda unit: unit.distance_to(enemy_center)).take(close_enemies.amount + 10)
+            defensors = self.units(MARINE) | self.units(MARAUDER)
+            defensors = defensors.sorted(lambda unit: unit.distance_to(enemy_center)).take(close_enemies.amount + 10)
             await self.do_actions([defensor.attack(enemy_center) for defensor in defensors])
 
     async def Scout_Management(self):
@@ -110,7 +111,7 @@ class SIMPLES(sc2.BotAI):
             for barrack in self.units(BARRACKS).ready.idle:
                 if self.supply_left > 2:
                     if (barrack.tag == self.barracksWithLabTag):
-                        if self.can_afford(MARAUDER):
+                        if self.can_afford(MARAUDER) and self.units(MARINE).amount > 10:
                             await self.do(barrack(BARRACKSTRAIN_MARAUDER))
                         else:
                             await self.do(barrack(BARRACKSTRAIN_MARINE))
@@ -134,8 +135,10 @@ class SIMPLES(sc2.BotAI):
             try:
                 barrack = self.units(BARRACKS).furthest_to(self.start_location)
                 await self.do_actions([marine.move(barrack.position.random_on_distance(5)) for marine in self.units(MARINE).idle])
+                await self.do_actions([marauder.move(barrack.position.random_on_distance(5)) for marauder in self.units(MARAUDER).idle])
             except:
                 await self.do_actions([marine.move(self.start_location) for marine in self.units(MARINE).idle])
+                await self.do_actions([marauder.move(self.start_location) for marauder in self.units(MARAUDER).idle])
     
     async def Research(self):
         cc = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND)).first
@@ -169,7 +172,7 @@ class SIMPLES(sc2.BotAI):
         await self.ArmiesMicro()
     
     async def ArmiesMacro(self):
-        if self.units(MARINE).amount > 70 and (self.time - self.lastAttack > 5):
+        if self.units(MARINE).amount > 30 and (self.time - self.lastAttack > 5):
             self.lastAttack = self.time
             all_positions = [item.position for sublist in [self.known_enemy_units, self.known_enemy_structures] for item in sublist]
             attack_position = Point2.center(all_positions + [self.enemy_start_locations[0]])
@@ -182,9 +185,16 @@ class SIMPLES(sc2.BotAI):
 
             await self.do_actions(actions)
 
+            if enemy_unit.position.distance_to(attack_position) < enemy_struct.position.distance_to(attack_position):
+                actions = [marauder.attack(enemy_unit.position) for marauder in self.units(MARAUDER) if not marauder.is_attacking]
+            else:
+                actions = [marauder.attack(enemy_struct.position) for marauder in self.units(MARAUDER) if not marauder.is_attacking]
+
+            await self.do_actions(actions)
+
         #make medivac follow marines
         marines = self.units(MARINE)
-        medivacs = self.units(MEDIVAC)
+        medivacs = self.units(MEDIVAC).idle
         if marines.amount == 0:
             await self.do_actions([medivac.move(self.start_location) for medivac in medivacs])
         else:
@@ -199,7 +209,7 @@ class SIMPLES(sc2.BotAI):
             #TODO maybe refactor to improve peformance? 
             # we could search for a particular enemy unit, instead of iterating all of them
             for unit in self.known_enemy_units.not_structure:
-                actions = [marine(EFFECT_STIM_MARINE) for marine in self.units(MARINE) 
+                actions = [marine(EFFECT_STIM_MARINE) for marine in (self.units(MARINE) | self.units(MARAUDER))
                     if not marine.has_buff(BuffId.STIMPACK) 
                         and marine.health > 20 
                         and marine.target_in_range(unit)]
