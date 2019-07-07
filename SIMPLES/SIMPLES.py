@@ -25,8 +25,22 @@ class SIMPLES(sc2.BotAI):
 
     async def on_step(self, iteration):
         await self.Scout_Management()
+        await self.Base_Defense_Management()
         await self.Resources_Management()  
         await self.Military_Management()
+
+    async def Base_Defense_Management(self):
+        await self.DefendMainBase()
+
+    async def DefendMainBase(self):
+        close_enemies = self.state.units.closer_than(40, self.start_location).filter(lambda unit: unit.is_enemy)
+
+        if close_enemies.amount > 3:
+            enemy_center = Point2.center([enemy.position for enemy in close_enemies])
+
+            defensors = self.units(MARINE).sorted(lambda unit: unit.distance_to(enemy_center)).take(close_enemies.amount + 10)
+            await self.do_actions([defensor.attack(enemy_center) for defensor in defensors])
+
 
     async def Scout_Management(self):
         await self.WalkingScout()
