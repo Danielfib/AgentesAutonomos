@@ -356,11 +356,15 @@ class SIMPLES(sc2.BotAI):
         
         for b in self.units(BARRACKSFLYING):
             lastTry = self.lastLandTry.get(b.tag, 0)
-            if self.time - lastTry > 5:
+            if self.time - lastTry > 2:
                 self.lastLandTry[b.tag] = self.time
                 _try = self.landTry.get(b.tag, 1)
-                await self.do(b(LAND_BARRACKS, b.position.offset(Point2((-2.5*_try, 0.5*_try)))))
-                self.landTry[b.tag] = _try + 1
+                if _try > 5:
+                    position_try = b.position.random_on_distance(3+(_try/10))
+                    await self.do(b(LAND_BARRACKS, position_try))
+                else:
+                    await self.do(b(LAND_BARRACKS, b.position.offset(Point2((-2.5*_try, 0.5*_try)))))
+                    self.landTry[b.tag] = _try + 1
 
         #expand if we can afford and have less than 2 bases
         if 1 <= self.townhalls.amount < 4 and self.already_pending(UnitTypeId.COMMANDCENTER) == 0 and self.can_afford(UnitTypeId.COMMANDCENTER) and self.units(MARINE).amount > 5:
@@ -464,14 +468,14 @@ def main():
             #"CatalystLE"
             # # Most maps have 2 upper points at the ramp (len(self.main_base_ramp.upper) == 2)
              "AutomatonLE",
-             "BlueshiftLE",
-             "CeruleanFallLE",
+             #"BlueshiftLE",
+             #"CeruleanFallLE",
              "KairosJunctionLE",
              "ParaSiteLE",
              "PortAleksanderLE",
-             "StasisLE",
+            # "StasisLE",
             # "DarknessSanctuaryLE",
-            "SequencerLE", # Upper right has a different ramp top
+            #"SequencerLE", # Upper right has a different ramp top
             "ParaSiteLE",  # Has 5 upper points at the main ramp
             #"AcolyteLE",  # Has 4 upper points at the ramp to the in-base natural and 2 upper points at the small ramp
             # #"HonorgroundsLE",  # Has 4 or 9 upper points at the large main base ramp
