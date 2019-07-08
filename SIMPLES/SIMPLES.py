@@ -23,6 +23,9 @@ class SIMPLES(sc2.BotAI):
 
     lastAttack = 0
     lastPatrol = 0
+    
+    landTry = {}
+    lastLandTry = {}
 
     @property
     def DIST_THRESHOLD(self):
@@ -344,10 +347,20 @@ class SIMPLES(sc2.BotAI):
 
         #every other barrack than the lab barrack should have reactor
         if self.units(BARRACKS).ready.amount > 1:
-            for rax in self.units(BARRACKS).ready:
-                #print(rax.add_on_tag)
-                if rax.add_on_tag == 0 and self.can_afford(BARRACKSREACTOR):            
-                    await self.do(rax(BUILD_REACTOR_BARRACKS))         
+            for rax in self.units(BARRACKS).ready.idle:
+                if rax.add_on_tag == 0 and self.can_afford(BARRACKSREACTOR):
+                    await self.do(rax(BUILD_REACTOR_BARRACKS))
+                    possible_blocking_building = self.units.closest_to(rax.position.offset(Point2((2.5, -0.5))))
+                    if possible_blocking_building.tag != rax.tag:
+                        await self.do(rax(LIFT_BARRACKS))
+        
+        for b in self.units(BARRACKSFLYING):
+            lastTry = self.lastLandTry.get(b.tag, 0)
+            if self.time - lastTry > 5:
+                self.lastLandTry[b.tag] = self.time
+                _try = self.landTry.get(b.tag, 1)
+                await self.do(b(LAND_BARRACKS, b.position.offset(Point2((-2.5*_try, 0.5*_try)))))
+                self.landTry[b.tag] = _try + 1
 
         #expand if we can afford and have less than 2 bases
         if 1 <= self.townhalls.amount < 4 and self.already_pending(UnitTypeId.COMMANDCENTER) == 0 and self.can_afford(UnitTypeId.COMMANDCENTER) and self.units(MARINE).amount > 5:
