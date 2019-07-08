@@ -169,12 +169,29 @@ class SIMPLES(sc2.BotAI):
             self.lastAttack = self.time
             all_positions = [item.position for sublist in [self.known_enemy_units, self.known_enemy_structures] for item in sublist]
             attack_position = Point2.center(all_positions + [self.enemy_start_locations[0]])
-            enemy_struct = self.known_enemy_structures.closest_to(attack_position)
-            enemy_unit = self.known_enemy_units.closest_to(attack_position)
-            if enemy_unit.position.distance_to(attack_position) < enemy_struct.position.distance_to(attack_position):
+            
+            enemy_struct = None
+            enemy_unit = None
+            try:
+                enemy_struct = self.known_enemy_structures.closest_to(attack_position)
+            except:
+                pass
+            try:
+                enemy_unit = self.known_enemy_units.closest_to(attack_position)
+            except:
+                pass
+
+            if enemy_unit is None and enemy_struct is None:
+                actions = [marine.attack(attack_position) for marine in self.units(MARINE) if not marine.is_attacking]
+            elif enemy_unit is None:
+                actions = [marine.attack(enemy_struct.position) for marine in self.units(MARINE) if not marine.is_attacking]
+            elif enemy_struct is None:
                 actions = [marine.attack(enemy_unit.position) for marine in self.units(MARINE) if not marine.is_attacking]
             else:
-                actions = [marine.attack(enemy_struct.position) for marine in self.units(MARINE) if not marine.is_attacking]
+                if enemy_unit.position.distance_to(attack_position) < enemy_struct.position.distance_to(attack_position):
+                    actions = [marine.attack(enemy_unit.position) for marine in self.units(MARINE) if not marine.is_attacking]
+                else:
+                    actions = [marine.attack(enemy_struct.position) for marine in self.units(MARINE) if not marine.is_attacking]
 
             await self.do_actions(actions)
 
