@@ -19,6 +19,7 @@ class SIMPLES(sc2.BotAI):
     scouterGoingEnemy = True
     scouterNumber = 0
     barracksWithLabTag = 0
+    belicUnits = None
 
     lastAttack = 0
     lastPatrol = 0
@@ -28,6 +29,8 @@ class SIMPLES(sc2.BotAI):
         return 5 + (10*self.scouterNumber)
 
     async def on_step(self, iteration):
+        self.belicUnits = self.units(MARINE) | self.units(MARAUDER)
+
         await self.Scout_Management()
         await self.Base_Defense_Management()
         await self.Resources_Management()  
@@ -189,33 +192,25 @@ class SIMPLES(sc2.BotAI):
                 pass
 
             if enemy_unit is None and enemy_struct is None:
-                actions = [marine.attack(attack_position) for marine in self.units(MARINE) if not marine.is_attacking]
+                actions = [marine.attack(attack_position) for marine in self.belicUnits if not marine.is_attacking]
             elif enemy_unit is None:
-                actions = [marine.attack(enemy_struct.position) for marine in self.units(MARINE) if not marine.is_attacking]
+                actions = [marine.attack(enemy_struct.position) for marine in self.belicUnits if not marine.is_attacking]
             elif enemy_struct is None:
-                actions = [marine.attack(enemy_unit.position) for marine in self.units(MARINE) if not marine.is_attacking]
+                actions = [marine.attack(enemy_unit.position) for marine in self.belicUnits if not marine.is_attacking]
             else:
                 if enemy_unit.position.distance_to(attack_position) < enemy_struct.position.distance_to(attack_position):
-                    actions = [marine.attack(enemy_unit.position) for marine in self.units(MARINE) if not marine.is_attacking]
+                    actions = [marine.attack(enemy_unit.position) for marine in self.belicUnits if not marine.is_attacking]
                 else:
-                    actions = [marine.attack(enemy_struct.position) for marine in self.units(MARINE) if not marine.is_attacking]
-
-            await self.do_actions(actions)
-
-            if enemy_unit.position.distance_to(attack_position) < enemy_struct.position.distance_to(attack_position):
-                actions = [marauder.attack(enemy_unit.position) for marauder in self.units(MARAUDER) if not marauder.is_attacking]
-            else:
-                actions = [marauder.attack(enemy_struct.position) for marauder in self.units(MARAUDER) if not marauder.is_attacking]
+                    actions = [marine.attack(enemy_struct.position) for marine in self.belicUnits if not marine.is_attacking]
 
             await self.do_actions(actions)
 
         #make medivac follow marines
-        marines = self.units(MARINE)
         medivacs = self.units(MEDIVAC).idle
-        if marines.amount == 0:
+        if self.belicUnits.amount == 0:
             await self.do_actions([medivac.move(self.start_location) for medivac in medivacs])
         else:
-            actions = [medivac.move(marines.sorted(lambda unit: unit.health + medivac.position.distance_to(unit.position)).first.position) for medivac in medivacs]
+            actions = [medivac.move(self.belicUnits.sorted(lambda unit: unit.health + medivac.position.distance_to(unit.position)).first.position) for medivac in medivacs]
             await self.do_actions(actions)
 
     async def ArmiesMicro(self):
@@ -223,8 +218,6 @@ class SIMPLES(sc2.BotAI):
         
         #use stimpack when attacking, if not already under effect
         if self.hasStimPack:
-            #TODO maybe refactor to improve peformance? 
-            # we could search for a particular enemy unit, instead of iterating all of them
             for unit in self.known_enemy_units.not_structure:
                 actions = [marine(EFFECT_STIM_MARINE) for marine in self.units(MARINE)
                     if not marine.has_buff(BuffId.STIMPACK) 
