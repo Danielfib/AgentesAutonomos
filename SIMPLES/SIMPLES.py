@@ -27,6 +27,8 @@ class SIMPLES(sc2.BotAI):
     
     landTry = {}
     lastLandTry = {}
+    
+    hasExploredAllEnemyLocations = False
 
     @property
     def DIST_THRESHOLD(self):
@@ -94,6 +96,23 @@ class SIMPLES(sc2.BotAI):
                 await self.do(scouter.move(self.enemy_start_locations[0]))
             else:
                 await self.do(scouter.move(self.start_location))
+
+        if self.time > 10*60 and not self.hasExploredAllEnemyLocations:
+            self.hasExploredAllEnemyLocations = True
+            workers_in_search = {}
+            i = 0
+            for enemy_location in self.enemy_start_locations:
+                while True:
+                    # No more workers to use in search, stop
+                    if len(self.enemy_start_locations)-i > self.workers.amount - len(workers_in_search.keys()):
+                        break
+                    worker = self.getWorker()
+                    if not workers_in_search.get(worker.tag, False):
+                        workers_in_search[worker.tag] = True
+                        await self.do(worker.move(enemy_location))
+                        break
+                    i += 1
+
     
     # async def BuilderScout(self):
     #     scouter = self.getScouter()
