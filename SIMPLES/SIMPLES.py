@@ -172,7 +172,7 @@ class SIMPLES(sc2.BotAI):
         await self.ArmiesMicro()
     
     async def ArmiesMacro(self):
-        if self.units(MARINE).amount > 30 and (self.time - self.lastAttack > 5):
+        if self.units(MARINE).amount > 50 and (self.time - self.lastAttack > 5):
             self.lastAttack = self.time
             all_positions = [item.position for sublist in [self.known_enemy_units, self.known_enemy_structures] for item in sublist]
             attack_position = Point2.center(all_positions + [self.enemy_start_locations[0]])
@@ -226,10 +226,16 @@ class SIMPLES(sc2.BotAI):
             #TODO maybe refactor to improve peformance? 
             # we could search for a particular enemy unit, instead of iterating all of them
             for unit in self.known_enemy_units.not_structure:
-                actions = [marine(EFFECT_STIM_MARINE) for marine in (self.units(MARINE) | self.units(MARAUDER))
+                actions = [marine(EFFECT_STIM_MARINE) for marine in self.units(MARINE)
                     if not marine.has_buff(BuffId.STIMPACK) 
                         and marine.health > 20 
                         and marine.target_in_range(unit)]
+                await self.do_actions(actions)
+
+                actions = [marauder(EFFECT_STIM_MARAUDER) for marauder in self.units(MARAUDER)
+                    if not marauder.has_buff(BuffId.STIMPACKMARAUDER) 
+                        and marauder.health > 20 
+                        and marauder.target_in_range(unit)]
                 await self.do_actions(actions)
 
     async def Resources_Management(self):
@@ -306,7 +312,7 @@ class SIMPLES(sc2.BotAI):
                         print(error)
 
         # manage supplies
-        if self.supply_left < 6 and self.supply_used >= 14 and self.can_afford(SUPPLYDEPOT) and self.units(SUPPLYDEPOT).not_ready.amount + self.already_pending(SUPPLYDEPOT) < 1:
+        if self.supply_left < 7 and self.supply_used >= 14 and self.can_afford(SUPPLYDEPOT) and self.units(SUPPLYDEPOT).not_ready.amount + self.already_pending(SUPPLYDEPOT) < 1:
             worker = self.getWorker()
             loc = await self.find_placement(SUPPLYDEPOT, worker.position, placement_step=3)
             await self.do(worker.build(SUPPLYDEPOT, loc))
@@ -441,7 +447,7 @@ def main():
     )
     sc2.run_game(sc2.maps.get(map), [
             Bot(Race.Terran, SIMPLES()), 
-            Computer(Race.Terran, Difficulty.Hard)
+            Computer(Race.Zerg, Difficulty.Hard)
         ], realtime=False
     )
     
