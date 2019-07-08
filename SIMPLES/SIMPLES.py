@@ -40,18 +40,18 @@ class SIMPLES(sc2.BotAI):
         await self.DefendMainBase()
 
     async def DefendMainBase(self):
-        close_enemies = self.known_enemy_units.closer_than(40, self.start_location)
+        close_enemies = self.known_enemy_units.closer_than(50, self.start_location)
 
         if close_enemies.amount > 3:
             enemy_center = Point2.center([enemy.position for enemy in close_enemies])
 
-            defensors = self.units(MARINE) | self.units(MARAUDER)
+            defensors = self.belicUnits
             defensors = defensors.sorted(lambda unit: unit.distance_to(enemy_center)).take(close_enemies.amount + 10)
             await self.do_actions([defensor.attack(enemy_center) for defensor in defensors])
 
     async def Scout_Management(self):
         await self.WalkingScout()
-        await self.BuilderScout()
+        #await self.BuilderScout()
     
     async def WalkingScout(self):
         scouter = self.getScouter()
@@ -88,25 +88,25 @@ class SIMPLES(sc2.BotAI):
             else:
                 await self.do(scouter.move(self.start_location))
     
-    async def BuilderScout(self):
-        scouter = self.getScouter()
-        if scouter is None:
-            return
+    # async def BuilderScout(self):
+    #     scouter = self.getScouter()
+    #     if scouter is None:
+    #         return
 
-        enemy_dist = scouter.position.distance_to(self.enemy_start_locations[0])
-        start_dist = scouter.position.distance_to(self.start_location)
+    #     enemy_dist = scouter.position.distance_to(self.enemy_start_locations[0])
+    #     start_dist = scouter.position.distance_to(self.start_location)
 
-        # 2 minutes passed                                      try around middle of the map
-        if self.time > 2*60 and self.can_afford(SENSORTOWER) and abs(enemy_dist - start_dist) < 50:
+    #     # 2 minutes passed                                      try around middle of the map
+    #     if self.time > 2*60 and self.can_afford(SENSORTOWER) and abs(enemy_dist - start_dist) < 50:
 
-            # Avoid building towers near to each other
-            exist_tower_near = False
-            for tower in self.units(SENSORTOWER):
-                if scouter.position.distance_to(tower.position) < 30:
-                    exist_tower_near = True
+    #         # Avoid building towers near to each other
+    #         exist_tower_near = False
+    #         for tower in self.units(SENSORTOWER):
+    #             if scouter.position.distance_to(tower.position) < 30:
+    #                 exist_tower_near = True
 
-            if not exist_tower_near:
-                await self.do(scouter.build(SENSORTOWER, scouter.position))
+    #         if not exist_tower_near:
+    #             await self.do(scouter.build(SENSORTOWER, scouter.position))
   
     async def Military_Management(self, iteration):
         #TODO rally troops in front of base
@@ -140,11 +140,9 @@ class SIMPLES(sc2.BotAI):
             self.lastPatrol = self.time
             try:
                 barrack = self.units(BARRACKS).furthest_to(self.start_location)
-                await self.do_actions([marine.move(barrack.position.random_on_distance(5)) for marine in self.units(MARINE).idle])
-                await self.do_actions([marauder.move(barrack.position.random_on_distance(5)) for marauder in self.units(MARAUDER).idle])
+                await self.do_actions([marine.move(barrack.position.random_on_distance(5)) for marine in self.belicUnits.idle])
             except:
-                await self.do_actions([marine.move(self.start_location) for marine in self.units(MARINE).idle])
-                await self.do_actions([marauder.move(self.start_location) for marauder in self.units(MARAUDER).idle])
+                await self.do_actions([marine.move(self.start_location) for marine in self.belicUnits.idle])
     
     async def Research(self):
         cc = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND)).first
@@ -187,7 +185,7 @@ class SIMPLES(sc2.BotAI):
         await self.ArmiesMicro()
     
     async def ArmiesMacro(self):
-        if self.units(MARINE).amount > 50 and (self.time - self.lastAttack > 5):
+        if self.units(MARINE).amount > 60 and (self.time - self.lastAttack > 5):
             self.lastAttack = self.time
             all_positions = [item.position for sublist in [self.known_enemy_units, self.known_enemy_structures] for item in sublist]
             attack_position = Point2.center(all_positions + [self.enemy_start_locations[0]])
@@ -243,19 +241,26 @@ class SIMPLES(sc2.BotAI):
                         and marauder.target_in_range(unit)]
                 await self.do_actions(actions)
 
-        for medivac in self.units(MEDIVAC):
-            if not medivac.is_idle and not medivac.has_buff(BuffId.MEDIVACSPEEDBOOST):
-                await self.do(medivac(EFFECT_MEDIVACIGNITEAFTERBURNERS))
+        actions = [medivac(EFFECT_MEDIVACIGNITEAFTERBURNERS) for medivac in self.units(MEDIVAC)
+            if not medivac.is_idle
+            and not medivac.has_buff(BuffId.MEDIVACSPEEDBOOST)
+            and await self.can_cast(medivac, EFFECT_MEDIVACIGNITEAFTERBURNERS)]
+        await self.do_actions(actions)
 
     async def Resources_Management(self):
         await self.Collector()
         await self.Constructor()
     
     async def Collector(self):
-        #print("TODO Collector")
+        #upgrade command centers to orbital command
+        if self.units(BARRACKS).ready.amount > 0:
+            for cc in self.units(COMMANDCENTER).ready:
+                if self.can_afford(ORBITALCOMMAND) and cc.is_idle and not self.already_pending(ORBITALCOMMAND):
+                    await self.do(cc(UPGRADETOORBITAL_ORBITALCOMMAND))
+        
         # manage collectors
         for center in self.townhalls.ready:
-            if center.ideal_harvesters > center.assigned_harvesters-1 and self.can_afford(SCV) and center.is_idle:
+            if center.ideal_harvesters > center.assigned_harvesters-3 and self.can_afford(SCV) and center.is_idle:
                 await self.do(center.train(SCV))
 
         # manage orbital energy and drop mules
@@ -264,12 +269,6 @@ class SIMPLES(sc2.BotAI):
             if mfs:
                 mf = max(mfs, key=lambda x:x.mineral_contents)
                 await self.do(oc(CALLDOWNMULE_CALLDOWNMULE, mf))
-
-        #upgrade command centers to orbital command
-        if self.units(BARRACKS).ready.amount > 0:
-            for cc in self.units(COMMANDCENTER).ready:
-                if self.can_afford(ORBITALCOMMAND) and cc.is_idle and not self.already_pending(ORBITALCOMMAND):
-                    await self.do(cc(UPGRADETOORBITAL_ORBITALCOMMAND))
 
         try:
             await self.distribute_workers()
@@ -318,24 +317,25 @@ class SIMPLES(sc2.BotAI):
                 loc = await self.find_placement(SUPPLYDEPOT, worker.position, placement_step=3)
                 await self.do(worker.build(SUPPLYDEPOT, loc))   
 
+        
+        if self.units(STARPORT).amount == 0 and self.can_afford(STARPORT) and self.units(FACTORY).ready.amount > 0:
+            worker = self.getWorker()
+            await self.build(STARPORT, near=cc.position.towards(self.game_info.map_center, 10).random_on_distance(4), unit=worker)
+        
         #building research buildings
-        if self.units(FACTORY).amount + self.already_pending(FACTORY) == 0 and self.can_afford(FACTORY) and self.units(BARRACKS).ready.amount > 2:
+        if self.units(FACTORY).amount + self.already_pending(FACTORY) == 0 and self.can_afford(FACTORY) and self.units(BARRACKS).ready.amount > 1:
             worker = self.getWorker()
             await self.build(FACTORY, near=cc.position.towards(self.game_info.map_center, 10).random_on_distance(4), unit=worker)
         elif self.units(ARMORY).amount + self.already_pending(ARMORY) == 0 and self.can_afford(ARMORY) and self.units(FACTORY).ready.amount > 0:
             worker = self.getWorker()
             await self.build(ARMORY, near=cc.position.towards(self.game_info.map_center, 10).random_on_distance(4), unit=worker)
         
-        if self.units(STARPORT).amount == 0 and self.can_afford(STARPORT) and self.units(FACTORY).ready.amount > 0:
-            worker = self.getWorker()
-            await self.build(STARPORT, near=cc.position.towards(self.game_info.map_center, 10).random_on_distance(4), unit=worker)
-        
         #TODO find a way to dont build barracks when add-on cant be built
         #sometimes barracks are built without space to add-ons
         #build 2 barracks, excluding the one from the ramp
         #barracks are 3x3 and with addon are basically 3x5        
         if ((self.units(BARRACKS).amount + self.already_pending(BARRACKS)) < (self.townhalls.amount * 2) \
-        or (self.minerals > 700 and (self.units(BARRACKS).ready.idle.amount + self.units(STARPORT).ready.idle.amount) == 0)) \
+        or (self.minerals > 1000 and (self.units(BARRACKS).ready.idle.amount + self.units(STARPORT).ready.idle.amount) == 0)) \
         and self.units(BARRACKS).amount > 0 and self.can_afford(BARRACKS) and self.units(ORBITALCOMMAND).amount > 0:
             worker = self.getWorker()
             next_expo = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND)).first.position
@@ -350,7 +350,9 @@ class SIMPLES(sc2.BotAI):
                     await self.do(rax(BUILD_REACTOR_BARRACKS))         
 
         #expand if we can afford and have less than 2 bases
-        if 1 <= self.townhalls.amount < 4 and self.already_pending(UnitTypeId.COMMANDCENTER) == 0 and self.can_afford(UnitTypeId.COMMANDCENTER) and self.units(MARINE).amount > 3:
+        if 1 <= self.townhalls.amount < 4 and self.already_pending(UnitTypeId.COMMANDCENTER) == 0 and self.can_afford(UnitTypeId.COMMANDCENTER) and self.units(MARINE).amount > 5:
+            if self.townhalls.amount > 1 and self.units(STARPORT).amount == 0:
+                return
             # get_next_expansion returns the center of the mineral fields of the next nearby expansion
             next_expo = await self.get_next_expansion()
             # from the center of mineral fields, we need to find a valid place to place the command center
