@@ -351,7 +351,7 @@ class SIMPLES(sc2.BotAI):
 
         #expand if we can afford and have less than 2 bases
         if 1 <= self.townhalls.amount < 4 and self.already_pending(UnitTypeId.COMMANDCENTER) == 0 and self.can_afford(UnitTypeId.COMMANDCENTER) and self.units(MARINE).amount > 5:
-            if self.townhalls.amount > 1 and self.units(STARPORT).amount == 0:
+            if self.townhalls.amount > 1 and (self.units(STARPORT).amount == 0 or not (UpgradeId.TERRANINFANTRYWEAPONSLEVEL1 in self.state.upgrades)):
                 return
             # get_next_expansion returns the center of the mineral fields of the next nearby expansion
             next_expo = await self.get_next_expansion()
