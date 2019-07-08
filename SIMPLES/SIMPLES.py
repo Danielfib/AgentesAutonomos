@@ -299,11 +299,11 @@ class SIMPLES(sc2.BotAI):
         ccs = self.units(COMMANDCENTER).amount + self.units(ORBITALCOMMAND).amount
         if ccs > 2:
             refineriesToBuild = 2
-        if self.units(SUPPLYDEPOT).amount > 0 and self.units(REFINERY).amount < refineriesToBuild and self.units(REFINERY).amount < 3 and self.units(BARRACKS).amount > 0:
+        if self.units(SUPPLYDEPOT).amount > 0 and self.units(REFINERY).amount < refineriesToBuild and self.units(BARRACKS).amount > 0:
             for th in self.townhalls:
                 vgs = self.state.vespene_geyser.closer_than(10, th)
                 for vg in vgs:
-                    if await self.can_place(REFINERY, vg.position) and self.can_afford(REFINERY):
+                    if await self.can_place(REFINERY, vg.position) and self.can_afford(REFINERY) and self.units(REFINERY).amount < 3:
                         # caution: the target for the refinery has to be the vespene geyser, not its position!
                         await self.do(self.getWorker().build(REFINERY, vg))
 
@@ -490,7 +490,7 @@ def main():
     )
     sc2.run_game(sc2.maps.get(map), [
             Bot(Race.Terran, SIMPLES()), 
-            Computer(Race.Zerg, Difficulty.VeryHard)
+            Computer(Race.Random, Difficulty.VeryHard)
         ], realtime=False
     )
     
