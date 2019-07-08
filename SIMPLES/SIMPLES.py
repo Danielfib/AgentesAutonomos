@@ -307,7 +307,7 @@ class SIMPLES(sc2.BotAI):
                 if w.exists:
                     await self.do(w.random.gather(a))
 
-        if self.workers.idle.amount > 50:
+        if self.workers.idle.amount > 80:
             self.AllIn = True
 
     async def Constructor(self):
