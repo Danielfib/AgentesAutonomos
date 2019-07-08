@@ -20,6 +20,7 @@ class SIMPLES(sc2.BotAI):
     scouterNumber = 0
     barracksWithLabTag = 0
     belicUnits = None
+    AllIn = False
 
     lastAttack = 0
     lastPatrol = 0
@@ -32,7 +33,10 @@ class SIMPLES(sc2.BotAI):
         return 5 + (10*self.scouterNumber)
 
     async def on_step(self, iteration):
-        self.belicUnits = self.units(MARINE) | self.units(MARAUDER) | self.units(HELLION)
+        if self.AllIn:
+            self.belicUnits = self.units()
+        else:        
+            self.belicUnits = self.units(MARINE) | self.units(MARAUDER) | self.units(HELLION)
 
         await self.Scout_Management()
         await self.Base_Defense_Management()
@@ -132,7 +136,7 @@ class SIMPLES(sc2.BotAI):
                 if sp.is_idle:
                     await self.do(sp(STARPORTTRAIN_MEDIVAC))
                 
-        if self.can_afford(COMMANDCENTER):
+        if self.minerals > 600:
             for factory in self.units(FACTORY).ready.idle:
                 await self.do(factory(FACTORYTRAIN_HELLION))        
 
@@ -188,7 +192,7 @@ class SIMPLES(sc2.BotAI):
         await self.ArmiesMicro()
     
     async def ArmiesMacro(self):
-        if self.units(MARINE).amount > 60 and (self.time - self.lastAttack > 5):
+        if self.belicUnits.amount > 60 and (self.time - self.lastAttack > 5):
             self.lastAttack = self.time
             all_positions = [item.position for sublist in [self.known_enemy_units, self.known_enemy_structures] for item in sublist]
             attack_position = Point2.center(all_positions + [self.enemy_start_locations[0]])
@@ -284,6 +288,9 @@ class SIMPLES(sc2.BotAI):
                 if w.exists:
                     await self.do(w.random.gather(a))
 
+        if self.workers.idle.amount > 50:
+            self.AllIn = True
+
     async def Constructor(self):
         await self.RampBlocker()        
         
@@ -368,7 +375,7 @@ class SIMPLES(sc2.BotAI):
 
         #expand if we can afford and have less than 2 bases
         if 1 <= self.townhalls.amount < 4 and self.already_pending(UnitTypeId.COMMANDCENTER) == 0 and self.can_afford(UnitTypeId.COMMANDCENTER) and self.units(MARINE).amount > 5:
-            if self.townhalls.amount > 1 and (self.units(STARPORT).amount == 0 or not (UpgradeId.TERRANINFANTRYWEAPONSLEVEL1 in self.state.upgrades)):
+            if self.townhalls.amount > 1 and (self.units(STARPORT).amount == 0):
                 return
             # get_next_expansion returns the center of the mineral fields of the next nearby expansion
             next_expo = await self.get_next_expansion()
