@@ -29,7 +29,7 @@ class SIMPLES(sc2.BotAI):
         return 5 + (10*self.scouterNumber)
 
     async def on_step(self, iteration):
-        self.belicUnits = self.units(MARINE) | self.units(MARAUDER)
+        self.belicUnits = self.units(MARINE) | self.units(MARAUDER) | self.units(HELLION)
 
         await self.Scout_Management()
         await self.Base_Defense_Management()
@@ -129,6 +129,9 @@ class SIMPLES(sc2.BotAI):
                 if sp.is_idle:
                     await self.do(sp(STARPORTTRAIN_MEDIVAC))
                 
+        if self.can_afford(COMMANDCENTER):
+            for factory in self.units(FACTORY).ready.idle:
+                await self.do(factory(FACTORYTRAIN_HELLION))        
 
         await self.Research()
         await self.Armies()
@@ -290,7 +293,7 @@ class SIMPLES(sc2.BotAI):
 
         # TODO: Expand right (today expansions may be hard because barracks placement are near next base)
         #expand if we can afford and have less than 2 bases
-        if 1 <= self.townhalls.amount < 2 and self.already_pending(UnitTypeId.COMMANDCENTER) == 0 and self.can_afford(UnitTypeId.COMMANDCENTER):
+        if 1 <= self.townhalls.amount < 3 and self.already_pending(UnitTypeId.COMMANDCENTER) == 0 and self.can_afford(UnitTypeId.COMMANDCENTER):
             # get_next_expansion returns the center of the mineral fields of the next nearby expansion
             next_expo = await self.get_next_expansion()
             # from the center of mineral fields, we need to find a valid place to place the command center
@@ -325,13 +328,12 @@ class SIMPLES(sc2.BotAI):
         #TODO find a way to dont build barracks when add-on cant be built
         #sometimes barracks are built without space to add-ons
         #build 2 barracks, excluding the one from the ramp
-        #barracks are 3x3 and with addon are basically 3x5
-        if (self.already_pending(COMMANDCENTER) + ccs) > 1:
-            if (self.units(BARRACKS).amount + self.already_pending(BARRACKS)) < 4 and self.units(BARRACKS).amount > 0 and self.can_afford(BARRACKS) and self.units(ORBITALCOMMAND).amount > 0:
-                worker = self.getWorker()
-                next_expo = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND)).first.position
-                location = await self.find_placement(UnitTypeId.COMMANDCENTER, next_expo, placement_step=1)
-                await self.build(BARRACKS, near=location, unit=worker)
+        #barracks are 3x3 and with addon are basically 3x5        
+        if (self.units(BARRACKS).amount + self.already_pending(BARRACKS)) < (self.townhalls.amount * 2.5) and self.units(BARRACKS).amount > 0 and self.can_afford(BARRACKS) and self.units(ORBITALCOMMAND).amount > 0:
+            worker = self.getWorker()
+            next_expo = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND)).first.position
+            location = await self.find_placement(UnitTypeId.COMMANDCENTER, next_expo, placement_step=1)
+            await self.build(BARRACKS, near=location, unit=worker)
 
         #every other barrack than the lab barrack should have reactor
         if self.units(BARRACKS).ready.amount > 1:
@@ -440,7 +442,7 @@ def main():
     )
     sc2.run_game(sc2.maps.get(map), [
             Bot(Race.Terran, SIMPLES()), 
-            Computer(Race.Zerg, Difficulty.Hard)
+            Computer(Race.Protoss, Difficulty.Hard)
         ], realtime=False
     )
     
