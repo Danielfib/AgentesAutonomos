@@ -120,7 +120,7 @@ class SIMPLES(sc2.BotAI):
                             await self.do(barrack(BARRACKSTRAIN_MARINE))
                     else:
                         await self.do(barrack(BARRACKSTRAIN_MARINE))
-                        if self.can_afford(MARINE):
+                        if self.can_afford(MARINE) and self.townhalls.amount > 1:
                             await self.do(barrack(BARRACKSTRAIN_MARINE))
 
         if self.can_afford(MEDIVAC) and self.units(STARPORT).amount > 0:
@@ -172,6 +172,15 @@ class SIMPLES(sc2.BotAI):
                     await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL3))
                 elif not(UpgradeId.TERRANINFANTRYARMORSLEVEL3 in self.state.upgrades) and self.can_afford(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL3) and not self.already_pending(UpgradeId.TERRANINFANTRYARMORSLEVEL3):
                     await self.do(idleBay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL3))
+
+        if self.units(MEDIVAC).amount > 0:
+            for armory in self.units(ARMORY).ready.idle:
+                if not(UpgradeId.TERRANVEHICLEANDSHIPARMORSLEVEL1 in self.state.upgrades) and self.can_afford(ARMORYRESEARCH_TERRANVEHICLEANDSHIPPLATINGLEVEL1) and self.units(ARMORY).ready.amount > 0 and not self.already_pending_upgrade(UpgradeId.TERRANVEHICLEANDSHIPARMORSLEVEL1):
+                    await self.do(armory(AbilityId.ARMORYRESEARCH_TERRANVEHICLEANDSHIPPLATINGLEVEL1))
+                elif not(UpgradeId.TERRANVEHICLEANDSHIPARMORSLEVEL2 in self.state.upgrades) and self.can_afford(ARMORYRESEARCH_TERRANVEHICLEANDSHIPPLATINGLEVEL2) and self.units(ARMORY).ready.amount > 0 and not self.already_pending_upgrade(UpgradeId.TERRANVEHICLEANDSHIPARMORSLEVEL2):
+                    await self.do(armory(AbilityId.ARMORYRESEARCH_TERRANVEHICLEANDSHIPPLATINGLEVEL2))
+                elif not(UpgradeId.TERRANVEHICLEANDSHIPARMORSLEVEL3 in self.state.upgrades) and self.can_afford(ARMORYRESEARCH_TERRANVEHICLEANDSHIPPLATINGLEVEL3) and self.units(ARMORY).ready.amount > 0 and not self.already_pending_upgrade(UpgradeId.TERRANVEHICLEANDSHIPARMORSLEVEL3):
+                    await self.do(armory(AbilityId.ARMORYRESEARCH_TERRANVEHICLEANDSHIPPLATINGLEVEL3))
 
     async def Armies(self):
         await self.ArmiesMacro()
@@ -234,6 +243,10 @@ class SIMPLES(sc2.BotAI):
                         and marauder.target_in_range(unit)]
                 await self.do_actions(actions)
 
+        for medivac in self.units(MEDIVAC):
+            if not medivac.is_idle and not medivac.has_buff(BuffId.MEDIVACSPEEDBOOST):
+                await self.do(medivac(EFFECT_MEDIVACIGNITEAFTERBURNERS))
+
     async def Resources_Management(self):
         await self.Collector()
         await self.Constructor()
@@ -275,9 +288,9 @@ class SIMPLES(sc2.BotAI):
         # build refineries (on nearby vespene) when at least one SUPPLYDEPOT is in construction
         refineriesToBuild = 1
         ccs = self.units(COMMANDCENTER).amount + self.units(ORBITALCOMMAND).amount
-        if ccs > 1:
+        if ccs > 2:
             refineriesToBuild = 2
-        if self.units(SUPPLYDEPOT).amount > 0 and self.units(REFINERY).amount < refineriesToBuild and self.units(REFINERY).amount < 3:
+        if self.units(SUPPLYDEPOT).amount > 0 and self.units(REFINERY).amount < refineriesToBuild and self.units(REFINERY).amount < 3 and self.units(BARRACKS).amount > 0:
             for th in self.townhalls:
                 vgs = self.state.vespene_geyser.closer_than(10, th)
                 for vg in vgs:
@@ -285,33 +298,25 @@ class SIMPLES(sc2.BotAI):
                         # caution: the target for the refinery has to be the vespene geyser, not its position!
                         await self.do(self.getWorker().build(REFINERY, vg))
 
-        cc = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND))[-1]
+        if self.townhalls.amount > 1:
+            cc = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND))[-1]
+        else:
+            cc = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND)).first
 
         if self.units(BARRACKSREACTOR).amount > 0 and (self.already_pending(ENGINEERINGBAY) + self.units(ENGINEERINGBAY).amount) < 2 and self.can_afford(ENGINEERINGBAY):
             worker = self.getWorker()
             await self.build(ENGINEERINGBAY, near=cc.position.towards(self.game_info.map_center, 10).random_on_distance(4), unit=worker)
 
-        # TODO: Expand right (today expansions may be hard because barracks placement are near next base)
-        #expand if we can afford and have less than 2 bases
-        if 1 <= self.townhalls.amount < 3 and self.already_pending(UnitTypeId.COMMANDCENTER) == 0 and self.can_afford(UnitTypeId.COMMANDCENTER):
-            # get_next_expansion returns the center of the mineral fields of the next nearby expansion
-            next_expo = await self.get_next_expansion()
-            # from the center of mineral fields, we need to find a valid place to place the command center
-            location = await self.find_placement(UnitTypeId.COMMANDCENTER, next_expo, placement_step=1)
-            if location:
-                # now we "select" (or choose) the nearest worker to that found location
-                w = self.select_build_worker(location)
-                if w and self.can_afford(UnitTypeId.COMMANDCENTER):
-                    # the worker will be commanded to build the command center
-                    error = await self.do(w.build(UnitTypeId.COMMANDCENTER, location))
-                    if error:
-                        print(error)
 
         # manage supplies
-        if self.supply_left < 7 and self.supply_used >= 14 and self.can_afford(SUPPLYDEPOT) and self.units(SUPPLYDEPOT).not_ready.amount + self.already_pending(SUPPLYDEPOT) < 1:
+        if self.supply_left < (self.units(BARRACKS).amount * 2 + 1) and self.supply_used >= 14 and self.can_afford(SUPPLYDEPOT) and self.units(SUPPLYDEPOT).not_ready.amount + self.already_pending(SUPPLYDEPOT) < 1:
             worker = self.getWorker()
             loc = await self.find_placement(SUPPLYDEPOT, worker.position, placement_step=3)
             await self.do(worker.build(SUPPLYDEPOT, loc))
+            if self.units(BARRACKS).amount > 3 and self.units(SUPPLYDEPOT).not_ready.amount + self.already_pending(SUPPLYDEPOT) < 1:
+                worker = self.getWorker()
+                loc = await self.find_placement(SUPPLYDEPOT, worker.position, placement_step=3)
+                await self.do(worker.build(SUPPLYDEPOT, loc))   
 
         #building research buildings
         if self.units(FACTORY).amount + self.already_pending(FACTORY) == 0 and self.can_afford(FACTORY) and self.units(BARRACKS).ready.amount > 2:
@@ -329,7 +334,9 @@ class SIMPLES(sc2.BotAI):
         #sometimes barracks are built without space to add-ons
         #build 2 barracks, excluding the one from the ramp
         #barracks are 3x3 and with addon are basically 3x5        
-        if (self.units(BARRACKS).amount + self.already_pending(BARRACKS)) < (self.townhalls.amount * 2.5) and self.units(BARRACKS).amount > 0 and self.can_afford(BARRACKS) and self.units(ORBITALCOMMAND).amount > 0:
+        if ((self.units(BARRACKS).amount + self.already_pending(BARRACKS)) < (self.townhalls.amount * 2) \
+        or (self.minerals > 700 and (self.units(BARRACKS).ready.idle.amount + self.units(STARPORT).ready.idle.amount) == 0)) \
+        and self.units(BARRACKS).amount > 0 and self.can_afford(BARRACKS) and self.units(ORBITALCOMMAND).amount > 0:
             worker = self.getWorker()
             next_expo = (self.units(COMMANDCENTER) | self.units(ORBITALCOMMAND)).first.position
             location = await self.find_placement(UnitTypeId.COMMANDCENTER, next_expo, placement_step=1)
@@ -341,6 +348,21 @@ class SIMPLES(sc2.BotAI):
                 #print(rax.add_on_tag)
                 if rax.add_on_tag == 0 and self.can_afford(BARRACKSREACTOR):            
                     await self.do(rax(BUILD_REACTOR_BARRACKS))         
+
+        #expand if we can afford and have less than 2 bases
+        if 1 <= self.townhalls.amount < 4 and self.already_pending(UnitTypeId.COMMANDCENTER) == 0 and self.can_afford(UnitTypeId.COMMANDCENTER) and self.units(MARINE).amount > 3:
+            # get_next_expansion returns the center of the mineral fields of the next nearby expansion
+            next_expo = await self.get_next_expansion()
+            # from the center of mineral fields, we need to find a valid place to place the command center
+            location = await self.find_placement(UnitTypeId.COMMANDCENTER, next_expo, placement_step=1)
+            if location:
+                # now we "select" (or choose) the nearest worker to that found location
+                w = self.select_build_worker(location)
+                if w and self.can_afford(UnitTypeId.COMMANDCENTER):
+                    # the worker will be commanded to build the command center
+                    error = await self.do(w.build(UnitTypeId.COMMANDCENTER, location))
+                    if error:
+                        print(error)
 
     async def RampBlocker(self):
         # Raise depos when enemies are nearby
@@ -442,7 +464,7 @@ def main():
     )
     sc2.run_game(sc2.maps.get(map), [
             Bot(Race.Terran, SIMPLES()), 
-            Computer(Race.Protoss, Difficulty.Hard)
+            Computer(Race.Zerg, Difficulty.VeryHard)
         ], realtime=False
     )
     
